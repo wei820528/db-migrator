@@ -2,6 +2,9 @@ const fs = require('fs');
 const mysql = require('mysql2');
 const mysqlPromise = require('mysql2/promise');
 const { extractRoutineBlocks, ROUTINE_BEGIN, ROUTINE_END } = require('./_shared');
+const { normalize } = require('../lib/cross-db');
+const { NeutralWriter } = require('../lib/cross-db/format');
+const { encodeRow } = require('../lib/cross-db/encode');
 
 function buildConnConfig(c, extra = {}) {
   return {
@@ -311,6 +314,103 @@ function parseTableNamesFromDump(sqlFilePath) {
   return [...tables];
 }
 
+// ============ v2 Theme B — cross-DB support ============
+
+// Build the IR-shaped schema by querying information_schema. Returns one
+// IR table object per requested name (or all base tables in the DB).
+async function getSchema(conn, tableNames) {
+  const c = await mysqlPromise.createConnection(buildConnConfig(conn));
+  try {
+    let names;
+    if (tableNames && tableNames.length) {
+      names = tableNames;
+    } else {
+      const [rows] = await c.query(
+        `SELECT TABLE_NAME FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME`,
+        [conn.database]
+      );
+      names = rows.map((r) => r.TABLE_NAME);
+    }
+
+    const out = [];
+    for (const tname of names) {
+      // Columns — COLUMN_TYPE has the full type string ('int(10) unsigned'), DATA_TYPE has just 'int'
+      const [cols] = await c.query(
+        `SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, EXTRA
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+         ORDER BY ORDINAL_POSITION`,
+        [conn.database, tname]
+      );
+      if (cols.length === 0) continue;
+
+      // Secondary indexes (skip PRIMARY)
+      const [idxRows] = await c.query(
+        `SELECT INDEX_NAME, COLUMN_NAME, NON_UNIQUE
+         FROM information_schema.STATISTICS
+         WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME <> 'PRIMARY'
+         ORDER BY INDEX_NAME, SEQ_IN_INDEX`,
+        [conn.database, tname]
+      );
+      const indexMap = new Map();
+      for (const r of idxRows) {
+        if (!indexMap.has(r.INDEX_NAME)) {
+          indexMap.set(r.INDEX_NAME, { name: r.INDEX_NAME, columns: [], unique: r.NON_UNIQUE === 0 });
+        }
+        indexMap.get(r.INDEX_NAME).columns.push(r.COLUMN_NAME);
+      }
+
+      out.push({
+        name: tname,
+        columns: cols.map((c) => ({
+          name: c.COLUMN_NAME,
+          type: normalize('mysql', c.COLUMN_TYPE),
+          nullable: c.IS_NULLABLE === 'YES',
+          primaryKey: c.COLUMN_KEY === 'PRI',
+          default: c.COLUMN_DEFAULT,
+          autoIncrement: /auto_increment/i.test(c.EXTRA || ''),
+        })),
+        indexes: [...indexMap.values()],
+      });
+    }
+    return out;
+  } finally { await c.end(); }
+}
+
+async function dumpNeutral(conn, options, outFilePath, onProgress) {
+  const irTables = await getSchema(conn, options.tables);
+  const writer = new NeutralWriter(outFilePath);
+  writer.writeHeader({ sourceDialect: 'mysql', db: conn.database, tables: irTables.map((t) => t.name) });
+
+  const rawConn = mysql.createConnection(buildConnConfig(conn));
+  await new Promise((res, rej) => rawConn.connect((e) => (e ? rej(e) : res())));
+  try {
+    onProgress?.(`Neutral dump: ${irTables.length} table(s)`);
+    for (const irt of irTables) {
+      onProgress?.(`> ${irt.name}`);
+      writer.writeSchema(irt);
+      if (options.noData) continue;
+
+      // Stream rows using the existing non-promise driver
+      const queryStream = rawConn.query(`SELECT * FROM ${escapeIdent(irt.name)}`).stream();
+      let n = 0;
+      await new Promise((resolve, reject) => {
+        queryStream.on('data', (row) => {
+          writer.writeRow(irt.name, encodeRow(row, irt.columns));
+          n++;
+          if (n % 5000 === 0) onProgress?.(`  ${irt.name}: ${n} rows...`);
+        });
+        queryStream.on('error', reject);
+        queryStream.on('end', resolve);
+      });
+      onProgress?.(`  ${irt.name}: ${n} rows done`);
+    }
+  } finally { rawConn.end(); }
+  await writer.end();
+  return { outFilePath };
+}
+
 module.exports = {
   type: 'mysql',
   testConnection,
@@ -318,4 +418,6 @@ module.exports = {
   dump,
   restore,
   parseTableNamesFromDump,
+  getSchema,
+  dumpNeutral,
 };

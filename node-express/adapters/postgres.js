@@ -2,6 +2,9 @@ const fs = require('fs');
 const { Client } = require('pg');
 const QueryStream = require('pg-query-stream');
 const { escapeIdent, escapeStringSql, formatValueGeneric, splitSqlStatements, parseTableNamesFromDumpGeneric, extractRoutineBlocks, ROUTINE_BEGIN, ROUTINE_END } = require('./_shared');
+const { normalize } = require('../lib/cross-db');
+const { NeutralWriter } = require('../lib/cross-db/format');
+const { encodeRow } = require('../lib/cross-db/encode');
 
 function buildClient(c) {
   return new Client({
@@ -353,4 +356,114 @@ function parseTableNamesFromDump(sqlFilePath) {
   return parseTableNamesFromDumpGeneric(fs.readFileSync(sqlFilePath, 'utf8'), '"');
 }
 
-module.exports = { type: 'postgres', testConnection, listTables, dump, restore, parseTableNamesFromDump };
+// ============ v2 Theme B — cross-DB support ============
+
+// Returns IR-shaped table descriptors. `tableNames` can be 'schema.table' or
+// bare table (defaults to 'public.<table>').
+async function getSchema(conn, tableNames) {
+  const c = buildClient(conn);
+  await c.connect();
+  try {
+    let tablePairs;
+    if (tableNames && tableNames.length) {
+      tablePairs = tableNames.map((t) => t.includes('.') ? t.split('.', 2) : ['public', t]);
+    } else {
+      const r = await c.query(
+        `SELECT table_schema, table_name FROM information_schema.tables
+         WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog','information_schema')
+         ORDER BY table_schema, table_name`
+      );
+      tablePairs = r.rows.map((x) => [x.table_schema, x.table_name]);
+    }
+
+    const out = [];
+    for (const [schema, tname] of tablePairs) {
+      // Columns — udt_name has the underlying type; data_type can be 'USER-DEFINED' for enums etc.
+      const cols = (await c.query(
+        `SELECT column_name, data_type, udt_name, character_maximum_length,
+                numeric_precision, numeric_scale, is_nullable, column_default
+         FROM information_schema.columns
+         WHERE table_schema = $1 AND table_name = $2
+         ORDER BY ordinal_position`,
+        [schema, tname]
+      )).rows;
+      if (cols.length === 0) continue;
+
+      // PK columns
+      const pkCols = new Set((await c.query(
+        `SELECT a.attname
+         FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+         WHERE i.indrelid = ($1 || '.' || $2)::regclass AND i.indisprimary`,
+        [schema, tname]
+      )).rows.map((r) => r.attname));
+
+      // Indexes (exclude PK / unique-constraint backing indexes)
+      const idxRows = (await c.query(
+        `SELECT indexname, indexdef FROM pg_indexes
+         WHERE schemaname = $1 AND tablename = $2
+         ORDER BY indexname`,
+        [schema, tname]
+      )).rows;
+
+      out.push({
+        name: tname,
+        schema,
+        columns: cols.map((c) => {
+          // Build the type string PG would use, then normalize
+          let typeStr = c.udt_name || c.data_type;
+          if (c.character_maximum_length) typeStr = `${typeStr}(${c.character_maximum_length})`;
+          else if (c.numeric_precision != null && /numeric|decimal/i.test(typeStr)) {
+            typeStr = c.numeric_scale != null
+              ? `${typeStr}(${c.numeric_precision},${c.numeric_scale})`
+              : `${typeStr}(${c.numeric_precision})`;
+          }
+          return {
+            name: c.column_name,
+            type: normalize('pg', typeStr),
+            nullable: c.is_nullable === 'YES',
+            primaryKey: pkCols.has(c.column_name),
+            default: c.column_default,
+            // PG's "default nextval(...)" is the giveaway for SERIAL-style autoinc
+            autoIncrement: typeof c.column_default === 'string' && /nextval\(/i.test(c.column_default),
+          };
+        }),
+        indexes: idxRows.map((r) => ({ name: r.indexname, def: r.indexdef })),
+      });
+    }
+    return out;
+  } finally { await c.end(); }
+}
+
+async function dumpNeutral(conn, options, outFilePath, onProgress) {
+  const irTables = await getSchema(conn, options.tables);
+  const writer = new NeutralWriter(outFilePath);
+  writer.writeHeader({ sourceDialect: 'postgres', db: conn.database, tables: irTables.map((t) => t.name) });
+
+  const c = buildClient(conn);
+  await c.connect();
+  try {
+    onProgress?.(`Neutral dump: ${irTables.length} table(s)`);
+    for (const irt of irTables) {
+      onProgress?.(`> ${irt.schema}.${irt.name}`);
+      writer.writeSchema(irt);
+      if (options.noData) continue;
+      const fq = `${ident(irt.schema)}.${ident(irt.name)}`;
+      const src = c.query(new QueryStream(`SELECT * FROM ${fq}`, [], { batchSize: 500 }));
+      let n = 0;
+      await new Promise((resolve, reject) => {
+        src.on('data', (row) => {
+          writer.writeRow(irt.name, encodeRow(row, irt.columns));
+          n++;
+          if (n % 5000 === 0) onProgress?.(`  ${irt.name}: ${n} rows...`);
+        });
+        src.on('error', reject);
+        src.on('end', resolve);
+      });
+      onProgress?.(`  ${irt.name}: ${n} rows done`);
+    }
+  } finally { await c.end(); }
+  await writer.end();
+  return { outFilePath };
+}
+
+module.exports = { type: 'postgres', testConnection, listTables, dump, restore, parseTableNamesFromDump, getSchema, dumpNeutral };

@@ -1,6 +1,9 @@
 const fs = require('fs');
 const Database = require('better-sqlite3');
 const { escapeIdent, formatValueGeneric, splitSqlStatements, parseTableNamesFromDumpGeneric } = require('./_shared');
+const { normalize } = require('../lib/cross-db');
+const { NeutralWriter } = require('../lib/cross-db/format');
+const { encodeRow } = require('../lib/cross-db/encode');
 
 // SQLite "connection" is just a file path. We accept conn.path (preferred) or conn.database / conn.host as fallbacks.
 function pickPath(c) {
@@ -157,4 +160,83 @@ function parseTableNamesFromDump(sqlFilePath) {
   return parseTableNamesFromDumpGeneric(fs.readFileSync(sqlFilePath, 'utf8'), '"');
 }
 
-module.exports = { type: 'sqlite', testConnection, listTables, dump, restore, parseTableNamesFromDump };
+// ============ v2 Theme B — cross-DB support ============
+
+// Returns IR-shaped table descriptors for the named tables (or all if not given).
+// IR shape per ../lib/cross-db/README.md.
+function getSchema(conn, tableNames) {
+  const db = open(conn, true);
+  try {
+    const tables = tableNames && tableNames.length
+      ? tableNames
+      : db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
+
+    const out = [];
+    for (const tname of tables) {
+      // PRAGMA table_info returns: cid, name, type, notnull, dflt_value, pk
+      const cols = db.prepare(`PRAGMA table_info(${ident(tname)})`).all();
+      if (cols.length === 0) continue;
+
+      // PRAGMA index_list → all indexes; PRAGMA index_info per-index for column list
+      const indexRows = db.prepare(`PRAGMA index_list(${ident(tname)})`).all();
+      const indexes = [];
+      for (const idx of indexRows) {
+        if (idx.origin === 'pk') continue;     // implicit PK index — emitted via primaryKey flag
+        const cols = db.prepare(`PRAGMA index_info(${ident(idx.name)})`).all();
+        indexes.push({
+          name: idx.name,
+          columns: cols.map((c) => c.name),
+          unique: idx.unique === 1,
+        });
+      }
+
+      out.push({
+        name: tname,
+        columns: cols.map((c) => ({
+          name: c.name,
+          type: normalize('sqlite', c.type || 'TEXT'),
+          nullable: c.notnull === 0,
+          primaryKey: c.pk > 0,
+          default: c.dflt_value,
+          // SQLite's INTEGER PRIMARY KEY is implicitly auto-incrementing
+          autoIncrement: c.pk > 0 && /\bINTEGER\b/i.test(c.type || ''),
+        })),
+        indexes,
+      });
+    }
+    return out;
+  } finally { db.close(); }
+}
+
+// Stream rows in the neutral format. Same options as dump() (options.tables to filter).
+async function dumpNeutral(conn, options, outFilePath, onProgress) {
+  const irTables = getSchema(conn, options.tables);
+  const writer = new NeutralWriter(outFilePath);
+  writer.writeHeader({
+    sourceDialect: 'sqlite',
+    db: pickPath(conn),
+    tables: irTables.map((t) => t.name),
+  });
+
+  const db = open(conn, true);
+  try {
+    onProgress?.(`Neutral dump: ${irTables.length} table(s)`);
+    for (const irt of irTables) {
+      onProgress?.(`> ${irt.name}`);
+      writer.writeSchema(irt);
+      if (options.noData) continue;
+      const stmt = db.prepare(`SELECT * FROM ${ident(irt.name)}`);
+      let n = 0;
+      for (const row of stmt.iterate()) {
+        writer.writeRow(irt.name, encodeRow(row, irt.columns));
+        n++;
+        if (n % 5000 === 0) onProgress?.(`  ${irt.name}: ${n} rows...`);
+      }
+      onProgress?.(`  ${irt.name}: ${n} rows done`);
+    }
+  } finally { db.close(); }
+  await writer.end();
+  return { outFilePath };
+}
+
+module.exports = { type: 'sqlite', testConnection, listTables, dump, restore, parseTableNamesFromDump, getSchema, dumpNeutral };

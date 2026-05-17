@@ -11,7 +11,11 @@ later is one parser + one emitter, not N² translators.
 | 1a | IR shape + type normalization | done |
 | 1b | Type mapping table (mysql↔pg↔sqlite) + dialect emitter | done |
 | 1c | Tests | done |
-| 2  | `getSchema(conn)` per adapter + neutral JSONL dump format | pending |
+| 2a | Neutral JSONL dump format spec | done |
+| 2b | `getSchema(conn)` per adapter (mysql / pg / sqlite) | done |
+| 2c | `dumpNeutral(conn, opts, outFile)` per adapter | done |
+| 2d | Value encoder (Date / Buffer / JSON → portable JSONL) | done |
+| 2e | Tests (encoder + format + sqlite e2e) | done |
 | 3  | Cross-DB restore (read JSONL, emit target dialect) | pending |
 | 4  | Dry-run preview UI | pending |
 | 5  | Integration matrix (6 directions) | pending |
@@ -63,11 +67,35 @@ before the actual run. Examples:
 
 - [normalize.js](normalize.js) — source-dialect string → IR `type` object
 - [emit.js](emit.js) — IR `type` object → target-dialect column DDL string
-- [tables.js](tables.js) — IR `table` object → target-dialect `CREATE TABLE` (Phase 2)
-- [index.js](index.js) — public surface: `normalize(dialect, source) → ir`, `emit(ir, target) → { sql, warnings }`
+- [encode.js](encode.js) — driver value ↔ JSON-safe value, schema-guided (Date / Buffer / BigInt / JSON)
+- [format.js](format.js) — `NeutralWriter` / `readNeutral` / `readMetadata` for the JSONL event stream
+- [index.js](index.js) — public surface: `normalize(dialect, source) → ir`, `emit(ir, target) → { sql, warnings }`, `translate(src, srcD, tgtD)`
+
+Adapter-side additions (Phase 2):
+
+- [adapters/sqlite.js](../../adapters/sqlite.js) — adds `getSchema(conn, tables?)` + `dumpNeutral(conn, opts, outFile)`
+- [adapters/mysql.js](../../adapters/mysql.js)  — same
+- [adapters/postgres.js](../../adapters/postgres.js) — same
+
+## Neutral JSONL format (v1)
+
+```
+{"op":"header","format":"neutral-v1","sourceDialect":"sqlite","db":"app.db","generated":"...","tables":["users"]}
+{"op":"schema","table":"users","columns":[
+  {"name":"id","type":{"kind":"int","size":64},"nullable":false,"primaryKey":true,"autoIncrement":true},
+  {"name":"email","type":{"kind":"string","size":128},"nullable":false}
+],"indexes":[{"name":"idx_email","columns":["email"],"unique":true}]}
+{"op":"row","table":"users","values":{"id":1,"email":"a@x.com"}}
+{"op":"row","table":"users","values":{"id":2,"email":"b@x.com"}}
+```
+
+Order: header must come first; for each table, its `schema` event must precede that table's `row` events. Tables can be interleaved or grouped. Reader keeps a `name → schema` map.
+
+Value-encoding rules are schema-guided (see [encode.js](encode.js) docstring) — no `$type` wrappers, so JSON columns with arbitrary content don't collide with type metadata.
 
 ## Tests
 
-`node --test ../../test/cross-db.test.js`
+`node --test ../../test/cross-db.test.js` — Phase 1 (56 tests)
+`node --test ../../test/cross-db-format.test.js` — Phase 2 (25 tests, 4 skipped if better-sqlite3 not installed)
 
 Run from project root: `npm test --prefix node-express`.
