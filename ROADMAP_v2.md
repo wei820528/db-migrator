@@ -28,13 +28,15 @@ v1 系列已收尾（7 adapter / plugin marketplace / online license / remote ki
 
 目前只支援 same-DB round-trip（MySQL → MySQL）。v2 加跨 DB 型別的真實遷移。
 
-| 子項 | 為什麼 | 工作量 |
+**Scope**：MySQL ↔ PostgreSQL ↔ SQLite 三角（6 個方向）。MSSQL / Mongo / Redis 不在這 round。
+
+| Phase | 子項 | 狀態 |
 |---|---|---|
-| Type mapping table | MySQL `int unsigned` → PG `bigint`、`varchar(N)` → PG `varchar(N)`、`TINYINT(1)` → PG `boolean` 等 | 中 |
-| DDL translator | 把 source 的 `CREATE TABLE` 解析後重組成 target 方言 | 大 |
-| Data converter | enum / bit / spatial / json 之間的轉換 | 中 |
-| Dry-run preview | 顯示「哪些 column 會被截斷、哪些 enum 沒對應」讓使用者先看 | 中 |
-| 跨 DB 規模測試 | integration test 加 cross 矩陣（mysql ↔ pg ↔ mssql ↔ sqlite） | 中 |
+| 1 | IR + type mapping + dialect emitter（含 lossy warnings） | ✓ done — `node-express/lib/cross-db/`，56 tests pass |
+| 2 | `getSchema(conn)` per adapter + neutral JSONL dump format | pending |
+| 3 | Cross-DB restore（讀 neutral JSONL，emit target dialect） | pending |
+| 4 | Dry-run preview UI | pending |
+| 5 | Integration matrix（6 方向 round-trip） | pending |
 
 **主要受眾**：真的要把 DB 從 MySQL 搬到 PG 的人。**契合專案名字** — 叫 "DB Migrator" 結果只做 same-DB 有點怪。
 **最大風險**：型別組合爆炸；可能要限制成「MySQL ↔ PG ↔ SQLite」三角，先不碰 MSSQL。
