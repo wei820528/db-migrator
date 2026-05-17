@@ -1,0 +1,212 @@
+/* ===========================================================
+   screenshots.css — 真實 UI 樣式（從 node-express/public/style.css copy 過來）
+   全部 scope 在 .ui-shot 底下，不會汙染文件本身的樣式
+   =========================================================== */
+
+.ui-shot {
+  font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+  background: #f5f6f8;
+  color: #222;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 14px 0;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.10);
+  font-size: 14px;
+  line-height: 1.55;
+  position: relative;
+}
+.ui-shot::before {
+  content: '🖥️ 實際 UI 渲染';
+  position: absolute;
+  top: 6px; right: 8px;
+  background: rgba(255,255,255,0.92);
+  color: #6b7280;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.ui-shot * { box-sizing: border-box; }
+.ui-shot [hidden] { display: none !important; }
+
+/* Header */
+.ui-shot header { background: #1f2937; color: white; padding: 14px 20px; }
+.ui-shot header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+.ui-shot .header-actions { display: flex; align-items: center; justify-content: space-between; }
+.ui-shot .btn-help {
+  background: rgba(255,255,255,.15); color: white;
+  border: 1px solid rgba(255,255,255,.3); border-radius: 50%;
+  width: 28px; height: 28px; cursor: pointer;
+  font-size: 14px; display: inline-flex;
+  align-items: center; justify-content: center;
+  padding: 0; text-decoration: none;
+}
+
+/* Banner */
+.ui-shot .banner { padding: 8px 20px; font-size: 13px; text-align: center; }
+.ui-shot .banner.trial    { background: #fef3c7; color: #78350f; }
+.ui-shot .banner.licensed { background: #d1fae5; color: #065f46; }
+.ui-shot .banner.expired  { background: #fef2f2; color: #991b1b; font-weight: 600; }
+.ui-shot .banner.kicked   { background: #fef2f2; color: #991b1b; font-weight: 600; }
+
+/* Main / steps */
+.ui-shot main { padding: 16px; }
+.ui-shot .step {
+  background: white; border-radius: 8px;
+  padding: 16px 20px; margin-bottom: 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.ui-shot .step h2 { margin: 0 0 12px; font-size: 15px; color: #374151; font-weight: 600; }
+.ui-shot .step h3 { font-size: 14px; color: #1f2937; margin: 14px 0 6px; }
+
+/* Cards */
+.ui-shot .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.ui-shot .card {
+  background: #fff; color: #1f2937; border: 2px solid #e5e7eb;
+  border-radius: 8px; padding: 12px 14px; cursor: pointer;
+  text-align: left; transition: all .15s; font-family: inherit;
+}
+.ui-shot .card.selected { border-color: #3b82f6; background: #eff6ff; }
+.ui-shot .card.disabled { opacity: .45; }
+.ui-shot .card-title { font-weight: 600; margin-bottom: 3px; color: #111827; font-size: 14px; }
+.ui-shot .card-sub { font-size: 11px; color: #6b7280; }
+
+/* Tag */
+.ui-shot .tag {
+  display: inline-block; padding: 2px 8px; background: #eff6ff;
+  color: #1d4ed8; border-radius: 4px; font-size: 11px; margin-left: 6px;
+}
+
+/* Form grid */
+.ui-shot .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ui-shot .form-grid label { display: flex; flex-direction: column; font-size: 12px; color: #4b5563; }
+.ui-shot .form-grid input {
+  margin-top: 3px; padding: 7px; border: 1px solid #d1d5db;
+  border-radius: 4px; font-size: 13px; font-family: inherit;
+}
+.ui-shot .form-actions {
+  display: flex; align-items: center; gap: 10px; margin-top: 10px;
+}
+.ui-shot .form-row {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  align-items: center; margin: 10px 0;
+}
+.ui-shot .field-hint {
+  display: block; color: #6b7280; font-size: 11px; margin-top: 4px;
+}
+
+/* Buttons */
+.ui-shot button {
+  background: #3b82f6; color: white; border: 0;
+  padding: 7px 14px; border-radius: 4px;
+  cursor: pointer; font-size: 13px;
+  font-family: inherit;
+}
+.ui-shot button.gray { background: #e5e7eb; color: #374151; }
+.ui-shot button.green { background: #10b981; }
+.ui-shot button.red { background: #dc2626; }
+
+/* Mode switch */
+.ui-shot .mode-switch {
+  margin-top: 14px; border-top: 1px solid #e5e7eb;
+  padding-top: 10px; display: flex; gap: 6px;
+}
+.ui-shot .mode-switch button { background: #e5e7eb; color: #374151; }
+.ui-shot .mode-switch button.active { background: #3b82f6; color: white; }
+
+/* DB list / tables list */
+.ui-shot .tables-list {
+  max-height: 220px; overflow-y: auto;
+  border: 1px solid #e5e7eb; border-radius: 4px;
+  padding: 8px; margin: 8px 0;
+}
+.ui-shot .tables-list label { display: block; padding: 3px; font-size: 13px; cursor: pointer; }
+.ui-shot .tables-list input[type="checkbox"] { margin-right: 6px; }
+
+/* Diff table */
+.ui-shot .diff-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+.ui-shot .diff-table th, .ui-shot .diff-table td {
+  padding: 6px 10px; text-align: left; border-bottom: 1px solid #e5e7eb;
+}
+.ui-shot .diff-table th { background: #f9fafb; font-weight: 600; color: #374151; }
+.ui-shot .exists-yes { color: #b45309; font-weight: 500; }
+.ui-shot .exists-no  { color: #059669; }
+
+/* Log */
+.ui-shot .log {
+  background: #111827; color: #d1d5db;
+  padding: 10px 14px; border-radius: 4px;
+  font-size: 11.5px; max-height: 180px; overflow-y: auto;
+  white-space: pre-wrap; margin: 8px 0;
+  font-family: "JetBrains Mono", Consolas, monospace;
+}
+
+/* Status text */
+.ui-shot .ok-text { color: #059669; }
+.ui-shot .err-text { color: #dc2626; }
+
+/* License modal (rendered inline, not actually fixed) */
+.ui-shot .lm-box {
+  background: white; border-radius: 8px;
+  padding: 20px; max-width: 540px; margin: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  border: 1px solid #e5e7eb;
+}
+.ui-shot .lm-box h2 { margin: 0 0 10px; font-size: 18px; }
+.ui-shot .lm-box h3 { margin: 14px 0 6px; font-size: 14px; }
+.ui-shot .lm-box textarea {
+  width: 100%; padding: 7px; border: 1px solid #d1d5db;
+  border-radius: 4px; font-family: monospace; font-size: 12px;
+  min-height: 60px;
+}
+.ui-shot #lm-info {
+  background: #f3f4f6; padding: 9px; border-radius: 4px; font-size: 13px;
+}
+.ui-shot .lm-box .input-text {
+  display: block; padding: 7px; border: 1px solid #d1d5db;
+  border-radius: 4px; font-size: 13px;
+  width: 100%; margin: 0;
+  font-family: inherit;
+}
+
+/* Project block */
+.ui-shot .proj-block {
+  border: 1px solid #e5e7eb; border-radius: 6px;
+  padding: 10px 12px; margin: 8px 0; background: #fafbfc;
+}
+.ui-shot .proj-toggle {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; cursor: pointer;
+}
+.ui-shot .proj-fields {
+  margin-top: 8px; padding-left: 22px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.ui-shot .proj-fields label {
+  display: flex; flex-direction: column;
+  font-size: 11.5px; color: #4b5563; gap: 3px;
+}
+.ui-shot .proj-fields input {
+  padding: 6px 8px; border: 1px solid #d1d5db;
+  border-radius: 4px; font-size: 12.5px;
+}
+
+/* Highlight overlay (showing where to click) */
+.ui-shot .highlight {
+  position: relative;
+}
+.ui-shot .highlight::after {
+  content: ''; position: absolute; inset: -4px;
+  border: 2px solid #f59e0b; border-radius: 8px;
+  box-shadow: 0 0 0 4px rgba(245,158,11,0.2);
+  pointer-events: none;
+  animation: shotPulse 2s ease-in-out infinite;
+}
+@keyframes shotPulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(245,158,11,0.2); }
+  50% { box-shadow: 0 0 0 8px rgba(245,158,11,0.05); }
+}

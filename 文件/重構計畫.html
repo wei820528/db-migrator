@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>重構計畫 — DB Migrator</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<script src="docs-nav.js"></script>
+<div class="hero">
+  <h1>📐 重構計畫</h1>
+  <p>整理目前程式碼裡需要重構的點 — 為什麼要改、改成什麼、影響範圍、優先級。按 P0-P3 排序。</p>
+  <a class="back" href="index.html">← 文件首頁</a>
+</div>
+<main>
+
+<div class="card">
+  <h2>📋 重構目錄（按優先級）</h2>
+  <table>
+    <tr><th>#</th><th>項目</th><th>P</th><th>難度</th><th>影響</th></tr>
+    <tr><td>R-01</td><td><a href="#r-01">License 三模式統一介面</a></td><td>P0</td><td>★★</td><td>Node + .NET</td></tr>
+    <tr><td>R-02</td><td><a href="#r-02">.NET online client 整合</a></td><td>P0</td><td>★★★</td><td>.NET only</td></tr>
+    <tr><td>R-03</td><td><a href="#r-03">Job 資料持久化</a></td><td>P1</td><td>★★</td><td>兩版共用</td></tr>
+    <tr><td>R-04</td><td><a href="#r-04">tmp 自動清理</a></td><td>P1</td><td>★</td><td>兩版</td></tr>
+    <tr><td>R-05</td><td><a href="#r-05">前端拆檔 / 模組化</a></td><td>P1</td><td>★★</td><td>共用前端</td></tr>
+    <tr><td>R-06</td><td><a href="#r-06">Adapter 介面型別化（TypeScript / interface）</a></td><td>P2</td><td>★★★</td><td>Node 主</td></tr>
+    <tr><td>R-07</td><td><a href="#r-07">移除前後端密碼明文存放</a></td><td>P2</td><td>★★</td><td>共用</td></tr>
+    <tr><td>R-08</td><td><a href="#r-08">統一錯誤格式 + i18n</a></td><td>P2</td><td>★★</td><td>共用</td></tr>
+    <tr><td>R-09</td><td><a href="#r-09">License server schema 拆檔</a></td><td>P2</td><td>★</td><td>License server</td></tr>
+    <tr><td>R-10</td><td><a href="#r-10">事件 log retention 自動化</a></td><td>P3</td><td>★</td><td>License server</td></tr>
+  </table>
+  <p>P0 = 立刻；P1 = 下個版本；P2 = 1.0 之前；P3 = 之後再說</p>
+</div>
+
+<div class="card">
+  <h2 id="r-01">R-01　License 三模式統一介面 <span class="tag license">P0</span></h2>
+  <h3>問題</h3>
+  <p>現在 Node 端用 <code>lib/license.js</code> 包了 offline 跟 online 兩個子模組，但 .NET 端只有 offline。三邊（offline / online / disabled）的 API surface 不完全一致，前端也要自己 if/else。</p>
+  <h3>建議</h3>
+  <ul>
+    <li>定義一個統一的 <code>LicenseProvider</code> 介面：<code>getStatus() / login(...) / logout() / saveKey(...) / removeKey()</code></li>
+    <li>三個實作：<code>OfflineProvider</code>、<code>OnlineProvider</code>、<code>NoopProvider</code>（disabled）</li>
+    <li>主程式只跟介面對話 → 模式切換靠 DI / factory</li>
+    <li>對應到 .NET：<code>ILicenseProvider</code> + <code>OfflineLicenseProvider</code> 等三個 class</li>
+  </ul>
+  <h3>影響範圍</h3>
+  <ul>
+    <li>Node：<code>lib/license.js</code> + <code>lib/license-online.js</code> + <code>lib/license-offline.js</code> 重構</li>
+    <li>.NET：<code>Services/LicenseService.cs</code> 拆分 + 加 <code>LicenseOnlineProvider.cs</code></li>
+    <li>API gate middleware 不動</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="r-02">R-02　.NET online client 整合 <span class="tag license">P0</span></h2>
+  <h3>問題</h3>
+  <p>.NET 後端目前沒接 license server，<code>LICENSE_MODE=online</code> 切過去後 <code>/api/license/online/login</code> 等 endpoint 不存在會 404。</p>
+  <h3>建議</h3>
+  <ol>
+    <li>新增 <code>Services/LicenseOnlineService.cs</code>，邏輯對應 Node 的 <code>lib/license-online.js</code>（HttpClient 呼叫 license server，token 存於 <code>.auth-token</code>，每 30 秒 heartbeat）</li>
+    <li>Controller 加 <code>POST /api/license/online/login</code>、<code>register</code>、<code>logout</code></li>
+    <li><code>Program.cs</code> 的 license gate middleware 多 mode 判斷 + feature gate</li>
+    <li>環境變數：<code>LICENSE_MODE</code> / <code>LICENSE_SERVER_URL</code></li>
+  </ol>
+  <h3>注意</h3>
+  <p>protocol 跟 license server 已定型，照 Node 版翻譯即可。預估 2 小時。</p>
+</div>
+
+<div class="card">
+  <h2 id="r-03">Job 資料持久化 <span id="r-03" class="tag license">P1</span></h2>
+  <h3>問題</h3>
+  <p>目前 job 狀態存在記憶體（Node：Map / .NET：ConcurrentDictionary），server 一重啟所有 job 進度就消失。客戶在跑 30 分鐘的大匯出，server 重開就斷掉看不到結果。</p>
+  <h3>建議</h3>
+  <ul>
+    <li>Job 改存於本機 SQLite</li>
+    <li>啟動時 load 未完成的 job → 標記為 <code>error: server restarted</code></li>
+    <li>tmp 檔案路徑也存進去 → 重啟後可以繼續提供下載連結</li>
+  </ul>
+  <h3>更激進的做法</h3>
+  <p>Job 改成 worker pattern（背景 process），server 只負責 enqueue + 查狀態。但目前用量沒到那個程度，先 SQLite 持久化就夠。</p>
+</div>
+
+<div class="card">
+  <h2 id="r-04">tmp 自動清理 <span class="tag license">P1</span></h2>
+  <h3>問題</h3>
+  <p><code>tmp/&lt;jobId&gt;/</code> 沒人清，跑久了會塞滿磁碟。匯出 / 上傳檔案都堆在那。</p>
+  <h3>建議</h3>
+  <pre><code>// 啟動時 + 每 6 小時跑一次
+function cleanupTmp() {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;  // 24h
+  for (const dir of fs.readdirSync(TMP_DIR)) {
+    const full = path.join(TMP_DIR, dir);
+    const stat = fs.statSync(full);
+    if (stat.mtimeMs < cutoff) fs.rmSync(full, { recursive: true, force: true });
+  }
+}</code></pre>
+  <p>job 完成後可以呼叫 callback 立即清；timeout 是兜底。</p>
+</div>
+
+<div class="card">
+  <h2 id="r-05">前端拆檔 / 模組化 <span class="tag license">P1</span></h2>
+  <h3>問題</h3>
+  <p><code>public/app.js</code> 已經 600+ 行，所有 tab handler、license modal、plugin loader、feature gate 全擠在一起。新加功能會滾雪球。</p>
+  <h3>建議</h3>
+  <pre><code>public/
+├── app.js                  ← 入口 + bootstrap
+├── modules/
+│   ├── state.js            ← 共用 state
+│   ├── tabs.js             ← mode switch
+│   ├── connection.js       ← DB type cards + form
+│   ├── databases.js        ← DB checkbox + tables
+│   ├── export.js
+│   ├── import.js
+│   ├── project.js
+│   ├── license-banner.js   ← banner + modal
+│   ├── plugin-loader.js    ← /api/plugins/ui 動態渲染
+│   └── tour.js (existing)</code></pre>
+  <p>用 ES modules（<code>type="module"</code>），各 module 自帶 setup function。</p>
+</div>
+
+<div class="card">
+  <h2 id="r-06">Adapter 介面型別化 <span class="tag license">P2</span></h2>
+  <h3>問題</h3>
+  <p>Node 版 adapter 介面靠 convention（每個 module export 5 個函式），沒有編譯期保證。寫 plugin adapter 漏實作會 runtime 噴錯。</p>
+  <h3>選項</h3>
+  <ul>
+    <li><b>(A)</b> 加 <code>.d.ts</code> 型別宣告，讓 IDE 提示 — 不影響 runtime</li>
+    <li><b>(B)</b> 整個 Node 端轉 TypeScript — 影響大，但長期收益高</li>
+    <li><b>(C)</b> 加 runtime validator：<code>adapters/index.js</code> 註冊時呼叫 <code>validateAdapter()</code> 確認 5 個方法都有</li>
+  </ul>
+  <p>建議先做 C（成本低、立即見效），TypeScript 化等專案再大些再說。</p>
+</div>
+
+<div class="card">
+  <h2 id="r-07">移除前後端密碼明文存放 <span class="tag license">P2</span></h2>
+  <h3>問題</h3>
+  <ul>
+    <li>瀏覽器 localStorage 存「最近使用」的 DB 密碼明文</li>
+    <li>License server 從 client 收到的 DB 連線資訊（轉發給 adapter）也明文 in-memory</li>
+  </ul>
+  <h3>建議</h3>
+  <ul>
+    <li>localStorage：用 SubtleCrypto + 一個 device-bound key 加密儲存（或乾脆「不存密碼」+ 每次手填）</li>
+    <li>記憶體中：可加 <code>SecureString</code> 包裝 — 但 JS 沒這玩意，能做的有限</li>
+    <li>最實際的：在 UI 加開關「儲存密碼」預設關</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="r-08">統一錯誤格式 + i18n <span class="tag license">P2</span></h2>
+  <h3>問題</h3>
+  <p>各 endpoint 的錯誤回傳格式不統一：</p>
+  <ul>
+    <li><code>{ error: "..." }</code></li>
+    <li><code>{ ok: false, error: "..." }</code></li>
+    <li><code>{ error, license: {...} }</code></li>
+    <li>ASP.NET ProblemDetails (<code>{ title, status, errors }</code>)</li>
+  </ul>
+  <h3>建議</h3>
+  <pre><code>// 統一格式
+{
+  "error": {
+    "code": "TRIAL_EXPIRED",   // 機器可讀
+    "message": "您的試用期已結束",  // i18n key
+    "feature": "bulk_export",   // 額外 metadata
+    "license": { ... }
+  }
+}</code></pre>
+  <p>前端用 <code>error.code</code> 切錯誤訊息（中/英文翻譯表）。</p>
+</div>
+
+<div class="card">
+  <h2 id="r-09">License server schema 拆檔 <span class="tag license">P2</span></h2>
+  <h3>問題</h3>
+  <p><code>db.js</code> 把所有 schema + migration 全寫在一起，未來改動容易撞。</p>
+  <h3>建議</h3>
+  <pre><code>license-server/
+├── db.js                   ← 連線 + run migrations
+└── migrations/
+    ├── 001-base.sql
+    ├── 002-add-email-verify.sql
+    ├── 003-add-ip-whitelist.sql
+    └── 004-add-stripe-customer.sql</code></pre>
+  <p>用簡單的 <code>schema_migrations</code> table 追已執行的 migration。</p>
+</div>
+
+<div class="card">
+  <h2 id="r-10">事件 log retention 自動化 <span class="tag license">P3</span></h2>
+  <h3>問題</h3>
+  <p><code>event_log</code> 表只增不刪。一年後會很大。</p>
+  <h3>建議</h3>
+  <pre><code>// 每天午夜
+db.prepare("DELETE FROM event_log WHERE at < date('now', '-90 days')").run();
+db.prepare("VACUUM").run();</code></pre>
+  <p>或更彈性：把 retention 天數放 env var <code>EVENT_RETENTION_DAYS=180</code>。</p>
+</div>
+
+<div class="card">
+  <h2>🛣️ 重構執行順序建議</h2>
+  <ol>
+    <li><b>第一波（這個 sprint）</b>：R-01 + R-02 — 把 license 三模式 + .NET online 補完，全產品線 license 機制統一</li>
+    <li><b>第二波</b>：R-03 + R-04 — Job 持久化 + tmp 清理，避免運維踩雷</li>
+    <li><b>第三波</b>：R-05 — 前端拆檔，為後續加大功能舖路</li>
+    <li><b>有空再做</b>：R-06 ~ R-10</li>
+  </ol>
+  <p>每一波都先寫整合測試（至少 happy path）再重構，避免回歸。</p>
+</div>
+
+<div class="card">
+  <h2>📊 重構前 vs 後（預期）</h2>
+  <table>
+    <tr><th>指標</th><th>現在</th><th>重構後（全做完）</th></tr>
+    <tr><td>license 程式碼複雜度</td><td>Node 3 個檔 + .NET 1 個檔（不對等）</td><td>兩邊各 1 介面 + 3 實作（對等）</td></tr>
+    <tr><td>Job 資料持久性</td><td>記憶體（restart = 全失）</td><td>SQLite（restart 後可繼續查）</td></tr>
+    <tr><td>tmp 磁碟風險</td><td>無清理 → 會爆</td><td>24 小時自動清</td></tr>
+    <tr><td>前端 app.js 行數</td><td>~700 行單檔</td><td>~50 行入口 + 9 個模組各 ~50 行</td></tr>
+    <tr><td>新增 plugin 觸發</td><td>localhost 只能改完手動 reload</td><td>同左（pluginHost 已支援 hot reload）</td></tr>
+    <tr><td>密碼洩漏面</td><td>localStorage 明文 + memory 明文</td><td>localStorage 加密 + 可選不存</td></tr>
+    <tr><td>錯誤格式</td><td>4 種格式</td><td>1 種，前端可機器辨</td></tr>
+  </table>
+</div>
+
+</main>
+</body>
+</html>

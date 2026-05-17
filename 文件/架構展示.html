@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>架構展示 — DB Migrator</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<script src="docs-nav.js"></script>
+<div class="hero">
+  <h1>🏛️ 架構展示</h1>
+  <p>整個系統由「Web 應用程式（兩版）」、「License Server」、「Plugin」三大塊構成。本頁用圖示說明各元件、資料流、依賴關係。</p>
+  <a class="back" href="index.html">← 文件首頁</a>
+</div>
+<main>
+
+<div class="card">
+  <h2>整體系統視圖</h2>
+  <div class="diagram">
+                                   ┌────────────────────────┐
+                                   │   License Server       │
+                                   │   (port 4000)          │
+                                   │   Node.js + SQLite     │
+                                   │                        │
+                                   │   ▸ 帳號 / Session      │
+                                   │   ▸ Plan / Features    │
+                                   │   ▸ IP 白名單 / 紀錄    │
+                                   │   ▸ Stripe webhook     │
+                                   │   ▸ Admin Web UI       │
+                                   └─────────┬──────────────┘
+                                             │ HTTPS
+                                             │ heartbeat 30s
+                          ┌──────────────────┼──────────────────┐
+                          ▼                                     ▼
+              ┌────────────────────┐              ┌────────────────────┐
+              │ DB Migrator (Node) │              │ DB Migrator (.NET) │
+              │ port 3000          │              │ port 3001          │
+              │                    │              │                    │
+              │ Express + adapters │              │ ASP.NET + adapters │
+              │ Plugin host (hot)  │              │ Plugins (rebuild)  │
+              └─────────┬──────────┘              └─────────┬──────────┘
+                        │ driver protocol                   │
+                        ▼                                   ▼
+                ┌──────────────────────────────────────────────┐
+                │   Target Databases                            │
+                │   MySQL / PostgreSQL / SQL Server / SQLite    │
+                │   Supabase / 各種雲端 DB                       │
+                └──────────────────────────────────────────────┘
+  </div>
+
+  <p>三個元件可獨立部署：</p>
+  <ul>
+    <li><b>License Server</b>：你（owner）架在 VPS 或本機，所有客戶 app 連同一台</li>
+    <li><b>DB Migrator (Node)</b> 跟 <b>(.NET)</b>：客戶端各自部署到自己機器跑</li>
+    <li><b>Target Databases</b>：客戶自己的 DB，不一定在同一網段</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>單一 DB Migrator 內部結構</h2>
+  <div class="diagram">
+┌─────────────────────────────────────────────────────────────┐
+│  Browser (UI)                                                │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  index.html / app.js / style.css / tour.js              │ │
+│  │  ▸ DB type cards   ▸ Connection form   ▸ DB checkbox    │ │
+│  │  ▸ Export / Import / Project tabs                       │ │
+│  │  ▸ License banner + 🔑 modal                            │ │
+│  └────────────────────────────────────────────────────────┘ │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ fetch JSON
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Web Server  (Express / ASP.NET)                             │
+│                                                              │
+│  ┌─ Middleware ─────────────────────────────────────────┐   │
+│  │  License gate  →  Module load failures  →  Routes    │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                                              │
+│  ┌─ Built-in routes ──────┐  ┌─ Plugins (auto-scan) ─────┐  │
+│  │  /api/connection       │  │  plugins/<name>/index.js   │  │
+│  │  /api/export           │  │  Plugins/*.cs              │  │
+│  │  /api/import           │  │  ▸ route + adapter + UI    │  │
+│  │  /api/project          │  └────────────────────────────┘  │
+│  │  /api/jobs             │                                   │
+│  │  /api/license          │  ┌─ Adapter Registry ──────────┐ │
+│  │  /api/modules          │  │ mysql / pg / mssql / sqlite │ │
+│  └────────────────────────┘  │ supabase  + plugin adapters │ │
+│                              └─────────────────────────────┘ │
+│  ┌─ Services ──────────────────────────────────────────┐    │
+│  │  Job queue  (in-memory map)                          │    │
+│  │  GitHub helper (clone / push)                        │    │
+│  │  Supabase Storage helper (REST API)                  │    │
+│  │  License (offline / online)                          │    │
+│  └──────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+                           │ DB driver protocol
+                           ▼
+                    [ Target Database ]
+  </div>
+</div>
+
+<div class="card">
+  <h2>License Server 內部結構</h2>
+  <div class="diagram">
+┌──────────────────────────────────────────────────────────┐
+│  License Server (Node.js)                                  │
+│                                                            │
+│  Public routes (rate-limited):                             │
+│  ▸ POST /api/auth/register     ─┐                          │
+│  ▸ POST /api/auth/login         │   ┌────────────────┐    │
+│  ▸ POST /api/auth/heartbeat     ├──►│  SQLite        │    │
+│  ▸ GET  /api/auth/me            │   │  ─ users       │    │
+│  ▸ POST /api/auth/logout        │   │  ─ sessions    │    │
+│  ▸ GET  /api/auth/verify-email ─┘   │  ─ event_log   │    │
+│                                     │  ─ admin_sess  │    │
+│  Admin (cookie auth):               └────────────────┘    │
+│  ▸ /api/admin/users (CRUD)          ▲                     │
+│  ▸ /api/admin/sessions              │                     │
+│  ▸ /api/admin/events                │ Stripe webhook       │
+│                                     │   ↓                   │
+│  Billing:                           │  ─ plan upgrade       │
+│  ▸ POST /api/billing/checkout ──────┘                       │
+│  ▸ POST /api/billing/webhook                                │
+│                                                              │
+│  Web UI (admin only):                                       │
+│  ▸ /admin/  (HTML, CSS, JS)                                 │
+└──────────────────────────────────────────────────────────┘
+       │                              │
+       │ nodemailer SMTP              │ Stripe API
+       ▼                              ▼
+   [ Email service ]             [ Stripe ]
+  </div>
+</div>
+
+<div class="card">
+  <h2>請求流：登入 + heartbeat + 被踢</h2>
+  <pre><code>使用者 A 登入 (IP=1.1.1.1)
+  Browser → DB Migrator → License Server
+                          ├ 驗 email + password
+                          ├ 檢查 plan / 試用未過期
+                          ├ 檢查 IP 白名單
+                          ├ 檢查 max_devices（超過 → 踢最舊）
+                          └ 發 token
+              ← 回 token + features
+
+每 30 秒 heartbeat
+  DB Migrator → License Server  POST /heartbeat (Bearer token)
+                                ├ session 存在？
+                                ├ IP 跟 session 紀錄一致？（不同就踢）
+                                ├ plan 還沒過期？
+                                └ 回最新 features
+              ← 200 OK + features
+
+使用者 A 在另一台 (IP=2.2.2.2) 也登入：
+  另一台 → License Server (login)
+                          └ 強制踢掉 IP=1.1.1.1 的 session
+                            (DELETE FROM sessions...)
+                            log 'kicked' event
+
+  原本那台下次 heartbeat：
+  DB Migrator → License Server  POST /heartbeat
+                                └ session 不存在 → 401 kicked
+
+  Browser 35 秒內也會 refresh banner
+  → 顯示「🚫 您的帳號在另一台電腦使用」</code></pre>
+</div>
+
+<div class="card">
+  <h2>請求流：試用版被擋下「多 DB 一次匯出」</h2>
+  <pre><code>1. 使用者勾 3 個 DB → 按「開始匯出」
+2. Browser → DB Migrator
+   POST /api/export   { databases: [db1, db2, db3] }
+
+3. License middleware 攔截：
+   ├ 取最新 license state (cache)
+   ├ features.bulk_export === false ?
+   ├ databases.length > features.multi_db_count_max ?
+   └ 是 → return 403
+       { error: "試用版不支援多資料庫一次匯出，請升級方案",
+         feature: "bulk_export" }
+
+4. Browser 收到 403 → 顯示升級提示</code></pre>
+  <div class="note">前端 UI 也會在 plan 改變時即時 disable 多選 checkbox（讓使用者根本選不到第 2 個）— 這是雙層防禦。</div>
+</div>
+
+<div class="card">
+  <h2>授權模式：offline ↔ online</h2>
+  <table>
+    <tr><th>模式</th><th>觸發方式</th><th>怎麼運作</th><th>適用</th></tr>
+    <tr>
+      <td><b>offline</b></td>
+      <td>預設，或 <code>LICENSE_MODE=offline</code></td>
+      <td>讀本機 <code>license.key</code>（Ed25519 簽章），無 license 時走 32 天試用（<code>.trial</code> 檔記時間）</td>
+      <td>單機 / 內網 / 不能連外</td>
+    </tr>
+    <tr>
+      <td><b>online</b></td>
+      <td><code>LICENSE_MODE=online</code> + <code>LICENSE_SERVER_URL=...</code></td>
+      <td>登入 license server 拿 token，每 30 秒 heartbeat。IP 換掉、超過 max_devices、過期都會被踢</td>
+      <td>商用 / 多人 / 真的要管制</td>
+    </tr>
+    <tr>
+      <td><b>disabled</b></td>
+      <td><code>LICENSE_MODE=disabled</code></td>
+      <td>完全沒有 gate，所有 /api/* 直接通過</td>
+      <td>開發 / 測試</td>
+    </tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Plugin 架構</h2>
+  <pre><code>Plugin 可以同時貢獻 4 種東西：
+
+1. HTTP Route       module.exports.router  →  /api/&lt;path&gt;
+2. DB Adapter       module.exports.adapter  →  在 Adapter Registry 註冊新 type
+3. Frontend UI      module.exports.ui      →  cards / tabs / scripts
+4. Static assets    module.exports.static  →  /plugins/static/&lt;name&gt;/...
+
+Node 版會 watch plugins/ 資料夾 → 改檔案自動 hot reload
+.NET 版要 rebuild（auto-discovery 在編譯時做）</code></pre>
+</div>
+
+<div class="card">
+  <h2>失敗隔離（拼圖式）</h2>
+  <ul>
+    <li><b>某個 adapter 載入失敗</b>：只該卡片 disabled，其他 4 種照用</li>
+    <li><b>某個 plugin 壞掉</b>：只該 plugin 不可用，其他正常</li>
+    <li><b>某個 route module 壞掉</b>：該路徑回 503，其他路徑照跑</li>
+    <li><b>License server 連不到</b>：app 進入「offline」狀態，已驗證的 session 暫時放行（不會直接掛掉）</li>
+    <li><b>Email server 連不到</b>：register 仍會成功，驗證連結改在 console 印出（dev mode）</li>
+  </ul>
+  <div class="note">所有失敗狀態都可以從 <code>GET /api/modules</code> 看到 → 前端用此 disable 對應 UI。</div>
+</div>
+
+</main>
+</body>
+</html>

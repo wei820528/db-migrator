@@ -1,0 +1,6 @@
+node_modules/
+license.db
+license.db-journal
+license.db-wal
+license.db-shm
+*.log

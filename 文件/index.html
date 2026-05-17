@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>DB Migrator - 交接文件總覽</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif; margin: 0; background: linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%); color: #1f2937; line-height: 1.7; min-height: 100vh; }
+  .hero { background: linear-gradient(135deg, #064e3b, #1e3a8a); color: #fff; padding: 60px 32px 50px; text-align: center; }
+  .hero h1 { margin: 0 0 12px; font-size: 32px; font-weight: 700; }
+  .hero p { margin: 0; font-size: 16px; color: #d1fae5; max-width: 700px; margin: 0 auto; }
+  main { max-width: 1100px; margin: -30px auto 60px; padding: 0 24px; position: relative; z-index: 1; }
+  .top-banner { background: #fff; padding: 24px 32px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 32px; }
+  .top-banner h2 { margin: 0 0 8px; color: #1f2937; }
+  .top-banner p { margin: 0; color: #6b7280; }
+
+  .version-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+  @media (max-width: 760px) { .version-grid { grid-template-columns: 1fr; } }
+  .version-card { background: #fff; border-radius: 12px; padding: 28px 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); border-top: 6px solid #10b981; }
+  .version-card.dotnet { border-top-color: #3b82f6; }
+  .version-card h3 { margin: 0 0 6px; font-size: 22px; color: #064e3b; }
+  .version-card.dotnet h3 { color: #1e3a8a; }
+  .version-card .stack { font-size: 13px; color: #6b7280; margin-bottom: 16px; }
+  .version-card .stack code { background: #f3f4f6; padding: 2px 8px; border-radius: 4px; font-size: 12px; color: #be123c; margin-right: 4px; }
+  .version-card ul { list-style: none; padding: 0; margin: 0; }
+  .version-card li { padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
+  .version-card li:last-child { border-bottom: 0; }
+  .version-card li a { color: #047857; text-decoration: none; font-weight: 500; display: flex; align-items: center; gap: 10px; }
+  .version-card.dotnet li a { color: #1d4ed8; }
+  .version-card li a:hover { text-decoration: underline; }
+  .version-card li .desc { display: block; color: #9ca3af; font-size: 12px; font-weight: normal; margin-top: 2px; padding-left: 28px; }
+  .icon { font-size: 18px; }
+
+  .comparison { background: #fff; border-radius: 12px; padding: 28px 32px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 32px; }
+  .comparison h2 { margin: 0 0 16px; color: #1f2937; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+  th { background: #f9fafb; color: #374151; font-weight: 600; }
+  tr:hover td { background: #fafafa; }
+  td code { background: #f3f4f6; padding: 1px 6px; border-radius: 3px; font-family: Consolas, monospace; font-size: 12px; color: #be123c; }
+
+  .quick-start { background: #1f2937; color: #e5e7eb; border-radius: 12px; padding: 28px 32px; margin-bottom: 32px; }
+  .quick-start h2 { margin: 0 0 18px; color: #fff; }
+  .quick-start .qs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 760px) { .quick-start .qs-grid { grid-template-columns: 1fr; } }
+  .quick-start .qs-card { background: #111827; padding: 18px 22px; border-radius: 8px; border-left: 4px solid #10b981; }
+  .quick-start .qs-card.dotnet { border-left-color: #3b82f6; }
+  .quick-start .qs-card h3 { margin: 0 0 12px; color: #fff; font-size: 16px; }
+  .quick-start pre { background: #000; padding: 12px 14px; border-radius: 4px; margin: 0; font-size: 12px; overflow-x: auto; }
+  .quick-start pre code { color: #86efac; font-family: Consolas, monospace; background: transparent; padding: 0; }
+
+  .footer-note { text-align: center; padding: 24px; color: #6b7280; font-size: 13px; }
+  .footer-note a { color: #047857; }
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>📚 DB Migrator 交接文件</h1>
+  <p>資料庫匯出 / 匯入工具完整交接資料。包含兩個對等實作版本（Node.js 與 .NET 8），底下分別有「操作手冊、Function 對照、UI 解析、修改指南」四份文件。</p>
+</div>
+
+<main>
+
+<div class="top-banner">
+  <h2>📂 專案位置</h2>
+  <p><code style="background: #f3f4f6; padding: 4px 10px; border-radius: 4px; color: #be123c;">F:\匯出資料庫的bat\</code></p>
+</div>
+
+<div class="version-grid">
+
+  <div class="version-card">
+    <h3>🟢 Node.js / Express 版</h3>
+    <div class="stack">
+      <code>Node 18+</code> <code>Express</code> <code>mysql2</code> <code>pg</code> <code>mssql</code> <code>better-sqlite3</code>
+    </div>
+    <ul>
+      <li>
+        <a href="node-express/index.html"><span class="icon">🏠</span>本版首頁</a>
+        <span class="desc">專案概觀、檔案結構、運作流程</span>
+      </li>
+      <li>
+        <a href="node-express/操作手冊.html"><span class="icon">📘</span>操作手冊</a>
+        <span class="desc">含模擬截圖，給第一次使用的人</span>
+      </li>
+      <li>
+        <a href="node-express/function對照.html"><span class="icon">🔧</span>Function 對照</a>
+        <span class="desc">每個 function 的參數、回傳、用途</span>
+      </li>
+      <li>
+        <a href="node-express/UI說明.html"><span class="icon">🎨</span>UI 解析</a>
+        <span class="desc">前端 HTML/CSS/JS 結構說明</span>
+      </li>
+      <li>
+        <a href="node-express/修改指南.html"><span class="icon">✏️</span>修改指南</a>
+        <span class="desc">10 個常見修改情境的步驟</span>
+      </li>
+    </ul>
+  </div>
+
+  <div class="version-card dotnet">
+    <h3>🔵 .NET 8 / ASP.NET Core 版</h3>
+    <div class="stack">
+      <code>.NET 8</code> <code>ASP.NET Core</code> <code>MySqlConnector</code> <code>Npgsql</code> <code>SqlClient</code> <code>M.D.Sqlite</code>
+    </div>
+    <ul>
+      <li>
+        <a href="dotnet8/index.html"><span class="icon">🏠</span>本版首頁</a>
+        <span class="desc">專案概觀、檔案結構、運作流程</span>
+      </li>
+      <li>
+        <a href="dotnet8/操作手冊.html"><span class="icon">📘</span>操作手冊</a>
+        <span class="desc">含 VS 與瀏覽器模擬截圖</span>
+      </li>
+      <li>
+        <a href="dotnet8/function對照.html"><span class="icon">🔧</span>Function 對照</a>
+        <span class="desc">每個 method 的參數、回傳、用途</span>
+      </li>
+      <li>
+        <a href="dotnet8/UI說明.html"><span class="icon">🎨</span>UI 解析</a>
+        <span class="desc">wwwroot 內 HTML/CSS/JS 說明</span>
+      </li>
+      <li>
+        <a href="dotnet8/修改指南.html"><span class="icon">✏️</span>修改指南</a>
+        <span class="desc">10 個常見修改情境的步驟</span>
+      </li>
+    </ul>
+  </div>
+
+</div>
+
+<div class="quick-start">
+  <h2>⚡ 快速啟動</h2>
+  <div class="qs-grid">
+    <div class="qs-card">
+      <h3>Node.js 版（port 3000）</h3>
+      <pre><code>cd F:\匯出資料庫的bat\node-express
+npm install
+npm start</code></pre>
+    </div>
+    <div class="qs-card dotnet">
+      <h3>.NET 8 版（port 3001）</h3>
+      <pre><code>cd F:\匯出資料庫的bat\dotnet8
+dotnet restore
+dotnet run</code></pre>
+    </div>
+  </div>
+</div>
+
+<div class="comparison">
+  <h2>📊 兩版本速覽比較</h2>
+  <table>
+    <tr><th>項目</th><th>Node.js 版</th><th>.NET 8 版</th></tr>
+    <tr><td>啟動 port</td><td>3000</td><td>3001</td></tr>
+    <tr><td>啟動指令</td><td><code>npm start</code></td><td><code>dotnet run</code></td></tr>
+    <tr><td>程式語言</td><td>JavaScript</td><td>C# 12</td></tr>
+    <tr><td>前端目錄</td><td><code>public/</code></td><td><code>wwwroot/</code></td></tr>
+    <tr><td>路由</td><td>Express Router</td><td>Attribute routing</td></tr>
+    <tr><td>背景任務</td><td>Promise.then() 接力</td><td><code>Task.Run()</code></td></tr>
+    <tr><td>Job 儲存</td><td>JS Map（內建 1 小時清理）</td><td>ConcurrentDictionary（無清理）</td></tr>
+    <tr><td>取消支援</td><td>—</td><td>CancellationToken（內部已接但未對外公開）</td></tr>
+    <tr><td>部署方式</td><td>需要 Node.js runtime</td><td>可發佈為單一 .exe（self-contained）</td></tr>
+    <tr><td>支援的 DB</td><td colspan="2">MySQL / MariaDB、PostgreSQL、SQL Server、SQLite（兩版完全一致）</td></tr>
+    <tr><td>共用 API</td><td colspan="2"><code>/api/connection/test</code>、<code>/api/connection/tables</code>、<code>/api/export</code>、<code>/api/import/inspect</code>、<code>/api/import/run</code>、<code>/api/jobs/:id</code></td></tr>
+  </table>
+</div>
+
+<div class="comparison">
+  <h2>🎯 該選哪個版本繼續開發？</h2>
+  <table>
+    <tr><th>情境</th><th>建議</th></tr>
+    <tr><td>已有 Node.js / npm 生態</td><td>用 <strong>node-express</strong>，套件豐富、開發快</td></tr>
+    <tr><td>公司是 .NET shop / 想單一 .exe 部署</td><td>用 <strong>dotnet8</strong>，可發佈成 self-contained exe</td></tr>
+    <tr><td>要長期維護、強型別、企業環境</td><td>用 <strong>dotnet8</strong>，C# 型別系統與工具鏈完整</td></tr>
+    <tr><td>輕量、要常改 UI / 加功能</td><td>用 <strong>node-express</strong>，hot reload 體驗較好</td></tr>
+    <tr><td>需要做大型檔串流壓縮等底層處理</td><td>兩版都行，.NET 的 IO 略快但差距不大</td></tr>
+  </table>
+</div>
+
+</main>
+
+<div class="footer-note">
+  📅 文件產生日期：2026-05-15　|　兩個版本獨立維護，不共用前端檔案
+</div>
+
+</body>
+</html>

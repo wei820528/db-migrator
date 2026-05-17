@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>DB Migrator (Node.js 版) - 交接文件</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif; margin: 0; background: #f5f6f8; color: #1f2937; line-height: 1.7; }
+  header { background: linear-gradient(135deg, #047857, #065f46); color: #fff; padding: 28px 32px; }
+  header h1 { margin: 0 0 6px; font-size: 24px; }
+  header .sub { color: #d1fae5; font-size: 14px; }
+  nav.topnav { background: #064e3b; padding: 10px 32px; }
+  nav.topnav a { color: #a7f3d0; text-decoration: none; margin-right: 18px; font-size: 14px; font-weight: 500; }
+  nav.topnav a:hover { color: #fff; text-decoration: underline; }
+  main { max-width: 980px; margin: 28px auto; padding: 0 24px 60px; }
+  h2 { color: #047857; border-bottom: 2px solid #d1fae5; padding-bottom: 6px; margin-top: 36px; }
+  h3 { color: #065f46; margin-top: 28px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #e5e7eb; font-size: 14px; vertical-align: top; }
+  th { background: #ecfdf5; color: #065f46; font-weight: 600; }
+  code { background: #f3f4f6; padding: 1px 6px; border-radius: 3px; font-family: Consolas, "Courier New", monospace; font-size: 13px; color: #be123c; }
+  pre { background: #1f2937; color: #e5e7eb; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 16px 0; }
+  .doc-card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #10b981; }
+  .doc-card a { text-decoration: none; color: #047857; font-weight: 600; font-size: 16px; }
+  .doc-card p { margin: 8px 0 0; color: #4b5563; font-size: 13px; }
+  .badge { display: inline-block; background: #10b981; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 6px; vertical-align: middle; }
+  .info-box { background: #ecfdf5; border-left: 4px solid #10b981; padding: 14px 18px; margin: 16px 0; border-radius: 4px; }
+  .warn-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0; border-radius: 4px; }
+  .file-tree { background: #1f2937; color: #d1d5db; padding: 16px 20px; border-radius: 6px; font-family: Consolas, monospace; font-size: 13px; line-height: 1.7; }
+  .file-tree .dir { color: #34d399; }
+  .file-tree .file { color: #93c5fd; }
+  .file-tree .note { color: #9ca3af; font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>DB Migrator - Node.js / Express 版<span class="badge">交接文件</span></h1>
+  <div class="sub">資料庫匯出 / 匯入工具 · 純 driver 實作 · 不需要任何外部 CLI 工具</div>
+</header>
+<nav class="topnav">
+  <a href="../index.html">總覽</a>
+  <a href="index.html">本版首頁</a>
+  <a href="操作手冊.html">操作手冊</a>
+  <a href="function對照.html">Function 對照</a>
+  <a href="UI說明.html">UI 解析</a>
+  <a href="修改指南.html">修改指南</a>
+</nav>
+<main>
+
+<h2>專案概觀</h2>
+<p>這是一個用 <strong>Node.js 18+ / Express</strong> 寫成的網頁工具，功能是把 MySQL、PostgreSQL、SQL Server、SQLite 四種資料庫做匯出 (export) 與匯入 (import)。<br>
+和傳統 <code>mysqldump</code>、<code>pg_dump</code>、<code>sqlcmd</code> 工具不同，這個版本是純 driver 實作，不需要在主機安裝任何 CLI 工具，連線資訊填一填就能用。</p>
+
+<div class="info-box">
+  <strong>啟動指令：</strong>
+  <pre>cd F:\匯出資料庫的bat\node-express
+npm install
+npm start        # 服務在 http://localhost:3000</pre>
+  第一次 <code>npm install</code> 時 <code>better-sqlite3</code> 會做 native build；Windows 需要 Visual Studio Build Tools。
+</div>
+
+<h2>檔案結構</h2>
+<div class="file-tree">
+<span class="dir">node-express/</span>
+├── <span class="file">server.js</span>              <span class="note">// 入口檔，啟動 Express 並掛載路由</span>
+├── <span class="file">package.json</span>           <span class="note">// 套件清單與 npm scripts</span>
+├── <span class="dir">routes/</span>                 <span class="note">// 4 個 REST API 路由</span>
+│   ├── <span class="file">connection.js</span>      <span class="note">// 測試連線 / 列資料表</span>
+│   ├── <span class="file">export.js</span>          <span class="note">// 啟動匯出 job / 下載檔</span>
+│   ├── <span class="file">import.js</span>          <span class="note">// 上傳 SQL / 啟動匯入</span>
+│   └── <span class="file">jobs.js</span>            <span class="note">// 查詢 job 狀態</span>
+├── <span class="dir">adapters/</span>               <span class="note">// 4 種資料庫各一個 adapter</span>
+│   ├── <span class="file">index.js</span>           <span class="note">// 註冊表 getAdapter()</span>
+│   ├── <span class="file">_shared.js</span>         <span class="note">// 共用 helpers</span>
+│   ├── <span class="file">mysql.js</span>           <span class="note">// MySQL/MariaDB</span>
+│   ├── <span class="file">postgres.js</span>        <span class="note">// PostgreSQL</span>
+│   ├── <span class="file">mssql.js</span>           <span class="note">// SQL Server</span>
+│   └── <span class="file">sqlite.js</span>          <span class="note">// SQLite</span>
+├── <span class="dir">lib/</span>
+│   └── <span class="file">jobs.js</span>            <span class="note">// 記憶體型 job tracker</span>
+├── <span class="dir">public/</span>                 <span class="note">// 前端 SPA</span>
+│   ├── <span class="file">index.html</span>         <span class="note">// 三步驟畫面</span>
+│   ├── <span class="file">app.js</span>             <span class="note">// 前端互動邏輯 + polling</span>
+│   └── <span class="file">style.css</span>          <span class="note">// 樣式表</span>
+└── <span class="dir">tmp/</span>                    <span class="note">// 自動產生：暫存目錄</span>
+    ├── <span class="dir">uploads/</span>            <span class="note">// 匯入上傳的 SQL 檔</span>
+    └── <span class="dir">{jobId}/</span>            <span class="note">// 匯出產生的 dump 檔</span>
+</div>
+
+<h2>系統運作流程</h2>
+<table>
+  <tr><th>步驟</th><th>使用者動作</th><th>背後執行</th></tr>
+  <tr><td>1</td><td>選擇 DB 類型</td><td>前端 app.js 設定 <code>state.type</code></td></tr>
+  <tr><td>2</td><td>填連線資訊並按「連線測試」</td><td>POST <code>/api/connection/test</code> → adapter.testConnection()</td></tr>
+  <tr><td>3</td><td>測試成功後自動拉資料表清單</td><td>POST <code>/api/connection/tables</code> → adapter.listTables()</td></tr>
+  <tr><td>4a</td><td>按「開始匯出」</td><td>POST <code>/api/export</code> → 建立 job → 背景跑 adapter.dump() → 寫進 tmp/{jobId}/xxx.sql</td></tr>
+  <tr><td>5a</td><td>前端每 0.8 秒輪詢進度</td><td>GET <code>/api/jobs/:id</code> → 回 progress 陣列</td></tr>
+  <tr><td>6a</td><td>完成後點下載連結</td><td>GET <code>/api/export/:id/file</code> → 串流送回 SQL 檔</td></tr>
+  <tr><td>4b</td><td>選 SQL 檔按「檢查內容」</td><td>POST <code>/api/import/inspect</code> → 解析 dump 的 table 名稱 → 比對目標 DB</td></tr>
+  <tr><td>5b</td><td>按「執行匯入」</td><td>POST <code>/api/import/run</code> → adapter.restore() → 逐句送進目標 DB</td></tr>
+</table>
+
+<h2>支援的資料庫</h2>
+<table>
+  <tr><th>類型</th><th>type 字串</th><th>用到的 driver</th><th>預設 Port</th></tr>
+  <tr><td>MySQL / MariaDB</td><td><code>mysql</code></td><td><code>mysql2</code></td><td>3306</td></tr>
+  <tr><td>PostgreSQL</td><td><code>postgres</code></td><td><code>pg</code> + <code>pg-query-stream</code></td><td>5432</td></tr>
+  <tr><td>SQL Server</td><td><code>mssql</code></td><td><code>mssql</code> (tedious)</td><td>1433</td></tr>
+  <tr><td>SQLite</td><td><code>sqlite</code></td><td><code>better-sqlite3</code></td><td>—（檔案路徑）</td></tr>
+</table>
+
+<h2>本版文件導覽</h2>
+<div class="card-grid">
+  <div class="doc-card">
+    <a href="操作手冊.html">📘 操作手冊</a>
+    <p>含模擬截圖的步驟教學，給第一次拿到工具的人快速上手。</p>
+  </div>
+  <div class="doc-card">
+    <a href="function對照.html">🔧 Function 對照表</a>
+    <p>每個 function 的用途、參數、回傳值、所在檔案行號。</p>
+  </div>
+  <div class="doc-card">
+    <a href="UI說明.html">🎨 UI 解析</a>
+    <p>前端 HTML 結構、CSS class、互動事件對應。</p>
+  </div>
+  <div class="doc-card">
+    <a href="修改指南.html">✏️ 修改指南</a>
+    <p>常見修改情境怎麼下手（換 port、加 DB、改樣式、加欄位等）。</p>
+  </div>
+</div>
+
+<h2>已知限制</h2>
+<div class="warn-box">
+純 driver 版相對 native dump 工具會少這些：
+<ul>
+  <li>❌ 外鍵約束（CREATE TABLE 內不會包含）</li>
+  <li>⚠️ 次要索引（SQLite 有，其他無）</li>
+  <li>❌ Triggers / Stored procedures / Functions / Views</li>
+  <li>❌ PostgreSQL 的 Sequences、MySQL 的 Events</li>
+  <li>❌ 沒有 auth — <strong>不要直接放上公網</strong></li>
+</ul>
+一般 application DB 用前兩項就夠，這些限制請在交接後依需求補。
+</div>
+
+</main>
+</body>
+</html>

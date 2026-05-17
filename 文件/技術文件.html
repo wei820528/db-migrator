@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>技術文件 — DB Migrator</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<script src="docs-nav.js"></script>
+<div class="hero">
+  <h1>🔬 技術文件</h1>
+  <p>各元件的技術規格：tech stack、API 規格、資料庫 schema、安全模型、設定檔、部署細節。</p>
+  <a class="back" href="index.html">← 文件首頁</a>
+</div>
+<main>
+
+<div class="card">
+  <h2>Tech Stack</h2>
+  <h3>DB Migrator (Node.js 版)</h3>
+  <table>
+    <tr><th>分類</th><th>技術 / 套件</th><th>用途</th></tr>
+    <tr><td>Runtime</td><td>Node.js ≥ 18</td><td>built-in fetch / crypto</td></tr>
+    <tr><td>Web framework</td><td>express ^4.19</td><td>routing + middleware</td></tr>
+    <tr><td>DB drivers</td><td>mysql2、pg、mssql、better-sqlite3</td><td>四種 DB 各一</td></tr>
+    <tr><td>File upload</td><td>multer</td><td>SQL / zip 上傳</td></tr>
+    <tr><td>Compression</td><td>archiver、adm-zip</td><td>多 DB 匯出 zip / 還原解 zip</td></tr>
+    <tr><td>Git ops</td><td>simple-git</td><td>專案備份 clone / push</td></tr>
+    <tr><td>Supabase</td><td>@supabase/supabase-js</td><td>Storage API</td></tr>
+    <tr><td>Crypto</td><td>built-in (Ed25519)</td><td>offline license 驗章</td></tr>
+  </table>
+
+  <h3>DB Migrator (.NET 8 版)</h3>
+  <table>
+    <tr><th>分類</th><th>NuGet</th><th>用途</th></tr>
+    <tr><td>Runtime</td><td>.NET 8 SDK</td><td>ASP.NET Core minimal hosting</td></tr>
+    <tr><td>DB drivers</td><td>MySqlConnector、Npgsql、Microsoft.Data.SqlClient、Microsoft.Data.Sqlite</td><td>四種 DB 各一</td></tr>
+    <tr><td>Git ops</td><td>LibGit2Sharp</td><td>專案備份 clone / push</td></tr>
+    <tr><td>Crypto</td><td>BouncyCastle.Cryptography</td><td>offline license Ed25519 驗章（.NET 8 沒內建）</td></tr>
+  </table>
+
+  <h3>License Server</h3>
+  <table>
+    <tr><th>分類</th><th>套件</th><th>用途</th></tr>
+    <tr><td>Runtime</td><td>Node.js ≥ 18</td><td></td></tr>
+    <tr><td>Web framework</td><td>express ^4.19</td><td></td></tr>
+    <tr><td>Storage</td><td>better-sqlite3</td><td>WAL 模式</td></tr>
+    <tr><td>Auth</td><td>bcryptjs</td><td>password hash 10 rounds</td></tr>
+    <tr><td>Cookie</td><td>cookie-parser</td><td>admin session cookie</td></tr>
+    <tr><td>Rate limit</td><td>express-rate-limit</td><td>auth endpoints 防暴力</td></tr>
+    <tr><td>Email</td><td>nodemailer</td><td>SMTP 驗證信</td></tr>
+    <tr><td>Payment</td><td>stripe</td><td>Checkout + webhook</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>API 規格 — DB Migrator</h2>
+
+  <h3>Connection</h3>
+  <pre><code>POST /api/connection/test
+  body: { type, host?, port?, user?, password?, path?, authMode?, ssl? }
+  → { ok, version, databases? }   // SQLite 不回 databases
+
+POST /api/connection/tables
+  body: { type, host, port, user, password, database }
+  → { tables: [{ name, rowEstimate }] }</code></pre>
+
+  <h3>Export</h3>
+  <pre><code>POST /api/export
+  body: {
+    type, connection: { host, port, user, password, ... },
+    databases: ["db1", "db2"],
+    options: { tables: [], noData: false, noSchema: false }
+  }
+  → { jobId }
+
+GET /api/export/:jobId/file   → 下載單 DB 的 .sql
+GET /api/export/:jobId/zip    → 下載多 DB 的 dumps.zip</code></pre>
+
+  <h3>Import</h3>
+  <pre><code>POST /api/import/inspect   (multipart: file + meta JSON)
+  → { uploadId, fileTables, dbTables, diff }
+
+POST /api/import/run
+  body: { type, connection: { ..., database }, uploadId }
+  → { jobId }</code></pre>
+
+  <h3>Project (備份還原)</h3>
+  <pre><code>POST /api/project/backup
+  body: { code?, db?, storage? }
+  → { jobId }
+
+POST /api/project/inspect   (multipart: file=backup.zip)
+  → { uploadId, manifest }
+
+POST /api/project/restore
+  body: { uploadId, dest: { code?, db?, storage? } }
+  → { jobId }
+
+GET /api/project/:jobId/zip   → 下載 backup.zip</code></pre>
+
+  <h3>Jobs</h3>
+  <pre><code>GET /api/jobs/:id
+  → { id, kind, status, progress: [...], result?, error?, createdAt }
+     status: 'pending' | 'running' | 'done' | 'error'</code></pre>
+
+  <h3>Modules + Plugins UI</h3>
+  <pre><code>GET /api/modules
+  → { routes: { name: { ok, mount, error? } }, adapters: { type: { ok, error? } } }
+
+GET /api/plugins/ui
+  → { cards: [...], tabs: [...], scripts: [...] }</code></pre>
+
+  <h3>License (前端用)</h3>
+  <pre><code>GET /api/license
+  → { mode: 'offline'|'online'|'disabled', status, daysLeft, info, features?, ... }
+
+POST /api/license/key            (offline mode)
+  body: { license: "&lt;b64&gt;.&lt;b64&gt;" }
+  → { ok, info } | { error }
+
+DELETE /api/license/key          (offline mode)
+
+POST /api/license/online/register
+POST /api/license/online/login
+POST /api/license/online/logout</code></pre>
+</div>
+
+<div class="card">
+  <h2>API 規格 — License Server</h2>
+
+  <h3>Auth (rate-limited 5/min/IP)</h3>
+  <pre><code>POST /api/auth/register
+  body: { email, password }
+  → { ok, message, devLink? }     // devLink only when SMTP not configured
+
+GET /api/auth/verify-email?token=...   (HTML page)
+
+POST /api/auth/login
+  body: { email, password }
+  → { token, user, status, daysLeft, features, maxDevices }
+     errors: 401 invalid, 403 unverified/blocked/whitelisted
+
+POST /api/auth/heartbeat
+  header: Authorization: Bearer &lt;token&gt;
+  → 200 same shape as login (without token)
+  → 401 { error, kicked: true }
+  → 403 { error, status: 'expired' }
+
+GET /api/auth/me                   (read-only)
+POST /api/auth/logout              (invalidate session)</code></pre>
+
+  <h3>Admin (cookie auth, must be is_admin=1)</h3>
+  <pre><code>POST /api/admin/login            { email, password } → set-cookie
+
+GET  /api/admin/users
+POST /api/admin/users             { email, password, plan, devices, expires }
+PATCH /api/admin/users/:id        any of: { plan, max_devices, expires_at, ip_whitelist, free_until, notes }
+DELETE /api/admin/users/:id
+POST /api/admin/users/:id/kick-all
+POST /api/admin/users/:id/reset-trial
+
+GET  /api/admin/sessions
+DELETE /api/admin/sessions/:id    (kick one specific session)
+
+GET  /api/admin/events?email=&amp;limit=
+GET  /api/admin/stats             (count by plan, online users, etc.)</code></pre>
+
+  <h3>Billing (Stripe)</h3>
+  <pre><code>POST /api/billing/checkout       { plan, userToken } → { checkoutUrl }
+POST /api/billing/webhook         (Stripe webhook — raw body)
+GET  /api/billing/status
+
+POST /api/billing/ecpay/checkout { plan, userToken } → { formAction, fields }   // browser auto-submits form
+POST /api/billing/ecpay/return   (ECPay async server-to-server; URL-encoded body; must respond "1|OK")
+GET  /api/billing/ecpay/status</code></pre>
+
+  <h3>2FA endpoints (Bearer token for setup/enable/disable; challenge for verify-login)</h3>
+  <pre><code>POST /api/auth/2fa/setup         (Bearer) → { secret, uri, qrSvg }   // saves encrypted secret but enabled=0
+POST /api/auth/2fa/enable        (Bearer + { code }) → enables after verifying first TOTP
+POST /api/auth/2fa/disable       (Bearer + { code OR password }) → wipes secret + enabled=0
+POST /api/auth/2fa/verify-login  ({ challengeId, code }) → real session token
+
+# /api/auth/login behavior change:
+#   - If user.totp_enabled=1, returns { needs2fa: true, challengeId } INSTEAD of token
+#   - Frontend must call /verify-login as second step</code></pre>
+
+  <h3>User portal (Bearer token, user's own data only)</h3>
+  <pre><code>GET    /api/user/me                  → plan / status / features / currentSession / totpEnabled
+GET    /api/user/sessions            → list MY sessions (with isCurrent flag)
+DELETE /api/user/sessions/:id        → kick own session (only if it's yours)
+POST   /api/user/kick-others         → kick all except current
+POST   /api/user/change-password     → { oldPassword, newPassword }
+POST   /api/user/upgrade             → { plan } → proxies to /billing/checkout
+GET    /api/user/plans               → public plan info (no internal price IDs)</code></pre>
+
+  <h3>Plugin marketplace (DB Migrator client)</h3>
+  <pre><code>POST /api/marketplace/preview   { url } → { source, manifest, signature, files: [{ runtime, path, bytes, hash, hashOk }] }
+POST /api/marketplace/install   { url, allowUnsigned? } → { ok, installed, version, fileCount, signed, trusted, installPath }
+GET  /api/marketplace/installed → { plugins: [{ name, version, signed, description, dir }] }
+DELETE /api/marketplace/installed/:name
+
+GET    /api/marketplace/trusted → { publishers: [{ id, fingerprint }] }     // PEM 不上前端
+POST   /api/marketplace/trusted   { id, pem } → add trust
+DELETE /api/marketplace/trusted/:id</code></pre>
+
+  <h3>Remote kill switch — offline-mode license revocation</h3>
+  <pre><code># Public (no auth) — offline clients phone home here every 24h
+GET  /api/revocation/list              → { updated, count, revoked: [uuid…], details: [{ id, revokedAt, reason }] }
+GET  /api/revocation/check?id=&lt;uuid&gt;  → { id, known, revoked, revokedAt?, reason? }
+
+# Admin (cookie-auth)
+GET    /api/admin/licenses?filter=active|revoked     → list issued licenses
+POST   /api/admin/licenses              { id (UUID), customer?, plan?, expires_at?, notes? }
+POST   /api/admin/licenses/:id/revoke   { reason? }
+DELETE /api/admin/licenses/:id/revoke   (unrevoke)
+DELETE /api/admin/licenses/:id          (hard delete — test cleanup)
+
+# Client (offline mode) — UI 上 "立刻更新撤銷清單" 按鈕
+POST /api/license/revocation/refresh   → { ok, error? }
+</code></pre>
+  <p>Flow：<code>license-tools/issue-license.js</code> 簽 .key 時生成 UUID 存進 payload 的 <code>lid</code>；
+  Admin 在 License Server 註冊（手動或 <code>import-licenses</code>），之後可隨時 revoke。
+  Client (Node + .NET) 每 24h 取 <code>/list</code>，cache 到 <code>.revocation-cache.json</code>，命中 → status <b>revoked</b> → gate 回 403。
+  30 天 grace 期：拿不到清單超過 30 天就視為 expired（避免拔網路繞過）。
+  舊版 v1 license（沒 lid）向下相容、不做檢查。</p>
+</div>
+
+<div class="card">
+  <h2>License Server — DB Schema</h2>
+  <pre><code>CREATE TABLE users (
+  id                     TEXT PRIMARY KEY,
+  email                  TEXT UNIQUE NOT NULL,
+  password_hash          TEXT NOT NULL,            -- bcrypt 10 rounds
+  plan                   TEXT NOT NULL DEFAULT 'trial',
+  max_devices            INTEGER NOT NULL DEFAULT 1,
+  trial_started_at       DATETIME,
+  expires_at             DATETIME,                 -- paid plan expiry
+  is_admin               INTEGER NOT NULL DEFAULT 0,
+  email_verified         INTEGER NOT NULL DEFAULT 0,
+  email_verify_token     TEXT,
+  ip_whitelist           TEXT,                     -- JSON array of CIDRs
+  free_until             DATETIME,                 -- "this month free" override
+  stripe_customer_id     TEXT,
+  notes                  TEXT,                     -- admin internal notes
+  created_at             DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE sessions (
+  id                     TEXT PRIMARY KEY,         -- the bearer token
+  user_id                TEXT NOT NULL,
+  ip                     TEXT NOT NULL,
+  user_agent             TEXT,
+  created_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_seen              DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE event_log (
+  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id                TEXT,
+  ip                     TEXT,
+  user_agent             TEXT,
+  event                  TEXT NOT NULL,
+    -- 'register' / 'email_verified' / 'login' / 'login_blocked'
+    -- / 'kicked' / 'expired' / 'logout' / 'plan_upgraded' / ...
+  details                TEXT,                     -- JSON
+  at                     DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE admin_sessions (
+  id                     TEXT PRIMARY KEY,         -- cookie value
+  user_id                TEXT NOT NULL,
+  ip                     TEXT,
+  created_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_seen              DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE issued_licenses (                  -- offline-mode kill switch
+  id                     TEXT PRIMARY KEY,         -- UUID from license-tools (= payload.lid)
+  customer               TEXT,
+  plan                   TEXT,
+  issued_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
+  expires_at             DATETIME,
+  revoked_at             DATETIME,                 -- NULL = active; set = revoked, will appear in /revocation/list
+  revoke_reason          TEXT,
+  source                 TEXT DEFAULT 'manual',    -- manual | cli | import
+  notes                  TEXT
+);
+CREATE INDEX idx_licenses_revoked ON issued_licenses(revoked_at);</code></pre>
+
+  <p>Migration 策略：<code>db.js</code> 啟動時呼叫 <code>addColumnIfMissing()</code>，新版 schema 改動不會弄壞舊 DB。</p>
+</div>
+
+<div class="card">
+  <h2>License Key 格式（offline 模式）</h2>
+  <p>JWT-like：<code>&lt;base64url-payload&gt;.&lt;base64url-Ed25519-sig&gt;</code></p>
+  <pre><code>// payload v2 (decode base64url 後) — 新發行 license 從 v2 開始都有 lid
+{
+  "lid":     "c3a4e1d8-91f7-4b21-8c0e-2e3a9d6f7b54",   // UUID — 用於遠端撤銷
+  "rurl":    "https://license.example.com/api/revocation/list",  // 可選，可被 LICENSE_REVOCATION_URL env 覆蓋
+  "customer": "Acme Inc",
+  "plan": "team",
+  "users": 5,
+  "issued":  "2026-05-15T00:00:00.000Z",
+  "expires": "2027-05-15T23:59:59.000Z",
+  "v": 2
+}
+
+// signature
+Ed25519(privateKey, base64url(payload))
+
+// 驗證（client 端）
+Ed25519.verify(publicKey, base64url(payload), sig) === true
+   AND payload.expires > now
+   AND (payload.lid IS NULL OR revocation_cache.check(payload.lid) ≠ 'revoked')   // v2+
+
+// 向下相容：v1 license（沒 lid）依舊有效，但無法被遠端撤銷</code></pre>
+  <p>公鑰嵌在 client（安全發佈），私鑰只在 owner 機器上用 <code>license-tools/</code> 來簽。
+  v2 開始 client 會額外維護 <code>.revocation-cache.json</code>：每 24h fetch <code>rurl</code> 一次，命中即拒絕啟動；30 天拿不到清單則強制 expired（防拔網路繞過）。</p>
+</div>
+
+<div class="card">
+  <h2>Plugin Marketplace — Manifest 格式</h2>
+  <p>每個可上架的 plugin 在 repo root 放一份 <code>plugin.json</code>。Client 從 <code>raw.githubusercontent.com/&lt;owner&gt;/&lt;repo&gt;/&lt;ref&gt;/plugin.json</code> 抓下來驗章。</p>
+  <pre><code>{
+  "name":        "hello-plugin",        // slug：alnum / _ / -，≤ 64 chars
+  "version":     "1.0.0",
+  "description": "Demo plugin",
+  "author":      "Your Name",
+  "files": {
+    "node-express": ["index.js", "src/helper.js"],
+    "dotnet8":      ["Hello.cs"],
+    "shared":       ["LICENSE"]         // 同時複製到兩個 runtime
+  },
+  "hashes": {                            // 由 sign-plugin.js 自動填
+    "node-express": { "index.js": "&lt;sha256-hex&gt;", "src/helper.js": "&lt;sha256-hex&gt;" },
+    "dotnet8":      { "Hello.cs":  "&lt;sha256-hex&gt;" },
+    "shared":       { "LICENSE":   "&lt;sha256-hex&gt;" }
+  },
+  "signedAt":    "2026-05-17T10:00:00.000Z",
+  "signature":   "&lt;base64 Ed25519 sig over canonical-JSON(manifest with signature='')&gt;"
+}</code></pre>
+
+  <p><b>Canonical JSON</b>：對所有 object 把 key 用 codepoint 排序、無空白、recursively。Node 與 .NET 兩邊用相同實作（<code>marketplace.js</code> / <code>MarketplaceService.cs</code>）。</p>
+
+  <h3>簽 plugin</h3>
+  <pre><code># 你自己 plugin 開發者：
+node license-tools/sign-plugin.js /path/to/your/plugin-dir
+# → 自動算 SHA-256 → 寫進 hashes → 用 license-tools/private-key.pem 簽 → 印 signature</code></pre>
+
+  <h3>Client 驗證流程</h3>
+  <ol>
+    <li><b>URL gate</b>：拒絕非 <code>github.com</code> URL</li>
+    <li><b>Manifest validate</b>：name slug、files 結構、每條 file path 通過 <code>isSafeRelativePath</code>（不能 absolute / drive letter / <code>..</code> / 怪字元）</li>
+    <li><b>Hash verify</b>：抓每個檔案 → SHA-256 → 跟 manifest.hashes 對比</li>
+    <li><b>Signature verify</b>：對 <code>trusted-publishers.json</code>（預設含 <code>license-tools/public-key.pem</code>）所有 PEM 嘗試 Ed25519 verify；命中 → trusted；否則 untrusted（UI 強制 user 勾選確認框）</li>
+    <li><b>Atomic install</b>：寫到 <code>plugins/&lt;name&gt;.staging-&lt;ts&gt;/</code> → <code>isInside()</code> 雙重檢查每個輸出檔 → <code>renameSync</code> 到 <code>plugins/&lt;name&gt;/</code>（pluginHost 自動 hot reload）</li>
+  </ol>
+</div>
+
+<div class="card">
+  <h2>Dump 格式 — Routine marker</h2>
+  <p>SQL adapter 的 procedure / function / trigger / event body 包 <code>BEGIN ... END</code> 區塊，內部有 <code>;</code>。樸素的 SQL splitter（split on <code>;</code> outside literals）會把這些當分隔符切壞。
+  解法：在 dump 時用標記把整個 routine 包起來：</p>
+
+  <pre><code>-- ROUTINE_BEGIN procedure add_user
+CREATE PROCEDURE add_user(IN name VARCHAR(64))
+BEGIN
+  INSERT INTO users(name) VALUES (name);
+  SELECT LAST_INSERT_ID();
+END
+-- ROUTINE_END</code></pre>
+
+  <p>Restore 端 <code>extractRoutineBlocks()</code> 走過 dump，產生 <code>[{kind:'sql',body}, {kind:'routine',body}, ...]</code>。SQL 區塊照舊跑 splitter，routine 區塊整段送 driver（無 split）。</p>
+
+  <p><b>各 adapter 套用對象：</b></p>
+  <ul>
+    <li><b>MySQL</b>：triggers、procedures、functions、events 全包</li>
+    <li><b>PostgreSQL</b>：functions、procedures 包；sequences / views 不用（無內部 <code>;</code>）；triggers 用 <code>pg_get_triggerdef</code> 出來的單行 SQL</li>
+    <li><b>SQL Server</b>：不用 marker — 改用 <code>GO</code> batch separator（既有 restore 已支援）</li>
+    <li><b>SQLite</b>：不用 marker — schema 內無 procedure / function 概念</li>
+  </ul>
+
+  <p>實作：[node-express/adapters/_shared.js](../node-express/adapters/_shared.js) <code>extractRoutineBlocks</code>；[dotnet8/Adapters/SqlHelpers.cs](../dotnet8/Adapters/SqlHelpers.cs) <code>ExtractRoutineBlocks</code>。兩邊行為 byte-compatible。</p>
+</div>
+
+<div class="card">
+  <h2>Dump 格式 — NoSQL adapter</h2>
+  <p>SQL adapter 的 dump 就是「能直接被自己 driver 跑」的 SQL，所以格式不需要文件化。NoSQL 兩個 adapter 用自家格式：</p>
+
+  <h3>MongoDB — JSONL / EJSON canonical</h3>
+  <pre><code>// 每行一個 JSON event，EJSON canonical 保留 BSON 型別
+{"op":"header","adapter":"mongo","db":"mydb","generated":"2026-05-17T...","collections":["users","posts"]}
+{"op":"collection","name":"users","options":{},"indexes":[{"key":{"email":1},"name":"email_1","unique":true}]}
+{"op":"insert","coll":"users","doc":{"_id":{"$oid":"..."},"email":"a@b.c","createdAt":{"$date":"..."}}}
+{"op":"insert","coll":"users","doc":{"_id":{"$oid":"..."},"email":"d@e.f"}}
+{"op":"collection","name":"posts","options":{},"indexes":[]}
+{"op":"insert","coll":"posts","doc":{"_id":{"$oid":"..."}}}</code></pre>
+  <p>Restore：對每個 <code>collection</code> event 先 <code>drop</code> 再 <code>createCollection</code> + <code>createIndexes</code>；<code>insert</code> events 用 1000 個一批的 <code>insertMany(ordered=false)</code>。重複 <code>_id</code> 會 soft-warn 不會中斷。</p>
+
+  <h3>Redis — redis-cli 風格 command 序列</h3>
+  <pre><code># DB Migrator dump (Redis db=0)
+SELECT 0
+
+SET user:1 "Alice"
+HSET user:2 name "Bob" age "30"
+SADD session:abc "x" "y" "z"
+ZADD scoreboard 99.5 alice 88 bob
+RPUSH queue "task1" "task2"
+PEXPIRE user:1 3600000</code></pre>
+  <p>Restore 逐行 <code>db.call(cmd, ...args)</code>，失敗 soft-warn 不中斷。Tokenize 規則跟 redis-cli 一樣：bareword 不 quote、含空白或 <code>"</code>/<code>\</code> 才 double-quote + escape。</p>
+
+  <p><b>列表單位 ("tables")：</b>Mongo 是 collection；Redis 是 <i>namespace</i> ＝ key 第一個 <code>:</code> 前的字串 + <code>:*</code>（無前綴的 key 都歸到 <code>_root</code>）。
+  Import 過濾用各 adapter 自己實作的 <code>filterDumpByTables</code>；SQL 系列 fallback 到共用的 <code>filterSqlByTables(text, tables, quoteChar)</code>。</p>
+</div>
+
+<div class="card">
+  <h2>安全模型</h2>
+
+  <h3>密碼</h3>
+  <ul>
+    <li>License server：bcrypt 10 rounds</li>
+    <li>DB Migrator 內存的目標 DB 密碼：明文（直接傳給 driver；不持久化在 server）</li>
+    <li>Browser localStorage 存的「最近使用」連線：明文（per-browser only）</li>
+  </ul>
+
+  <h3>Token / Session</h3>
+  <ul>
+    <li>License server session token：32-byte 隨機 hex（256 bit），單一 active per user × max_devices</li>
+    <li>Admin session cookie：32-byte 隨機 hex，HttpOnly + Secure (HTTPS) + SameSite=Lax</li>
+    <li>Token 被 IP 變更或被踢時 server 端立即刪除，client 下次 heartbeat 收到 401</li>
+  </ul>
+
+  <h3>傳輸</h3>
+  <ul>
+    <li>License server <b>必須</b> 部署於 HTTPS，否則密碼會明文傳輸</li>
+    <li>使用 reverse proxy（nginx / Caddy）終結 TLS，server 本身只跑 HTTP</li>
+    <li><code>app.set('trust proxy', true)</code> 已啟用，正確讀取 X-Forwarded-For</li>
+  </ul>
+
+  <h3>注入 / XSS</h3>
+  <ul>
+    <li>所有 SQL 操作走 driver parameterized query（DB Migrator 內部）</li>
+    <li>Admin web UI 的所有使用者輸入都經 escape 後再 render</li>
+    <li>License server 沒有用到 shell — 無 command injection</li>
+  </ul>
+
+  <h3>Rate limit</h3>
+  <ul>
+    <li><code>/api/auth/register</code>、<code>/api/auth/login</code>、<code>/api/auth/verify-email</code>：5 min 窗口、20 req/IP</li>
+    <li>更激烈的暴力測試應在 nginx / Cloudflare 那層擋</li>
+  </ul>
+
+  <h3>已知限制</h3>
+  <ul>
+    <li>Offline mode：人能拿原始碼把 license 檢查 patch 掉，這只能靠法律 + license key 機制嚇阻</li>
+    <li>沒有 2FA、沒有 password reset email（只有 admin 手動改）</li>
+    <li>事件 log 沒做 retention 清理 — 跑久會爆，建議每月手動 vacuum</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>部署 — License Server (production)</h2>
+  <h3>VPS + systemd + Caddy</h3>
+  <pre><code># /etc/systemd/system/license-server.service
+[Unit]
+Description=DB Migrator License Server
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/license-server
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+Environment=PORT=4000
+Environment=LICENSE_DB=/var/lib/license-server/license.db
+Environment=PUBLIC_BASE_URL=https://license.example.com
+Environment=SMTP_HOST=smtp.sendgrid.net SMTP_PORT=587
+Environment=SMTP_USER=apikey SMTP_PASS=YOUR_KEY SMTP_FROM=no-reply@example.com
+Environment=STRIPE_SECRET_KEY=sk_live_... STRIPE_WEBHOOK_SECRET=whsec_...
+Environment=STRIPE_PRICE_BASIC=price_xxx STRIPE_PRICE_TEAM=price_yyy
+Environment=ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=GENERATE_STRONG
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+
+  <pre><code># Caddyfile
+license.example.com {
+  reverse_proxy localhost:4000
+}</code></pre>
+
+  <h3>備份 license.db</h3>
+  <pre><code># 每天備份（cron）
+0 3 * * * sqlite3 /var/lib/license-server/license.db ".backup /backups/license-$(date +\%F).db"</code></pre>
+</div>
+
+<div class="card">
+  <h2>測試策略</h2>
+  <table>
+    <tr><th>層</th><th>位置</th><th>覆蓋什麼</th><th>跑法</th></tr>
+    <tr>
+      <td>Unit</td>
+      <td><code>node-express/test/</code> (87 個)<br><code>license-server/test/</code> (55 個)</td>
+      <td>純函式：SQL splitter / Mongo EJSON parse / Redis quote / canonical JSON / IP wildcard / TOTP / ECPay MAC / revocation cache / plugin manifest 驗章</td>
+      <td><code>npm test</code>（秒級，無外部依賴）</td>
+    </tr>
+    <tr>
+      <td>Integration</td>
+      <td><code>integration/</code></td>
+      <td>真實 driver × adapter 組合：mysql 8.4 / postgres 16 / mssql 2022 / mongo 7 / redis 7（sqlite 本機檔）；每 adapter 跑 <code>seed → dump → parseTableNamesFromDump → drop → restore → verify counts</code></td>
+      <td><code>cd integration && npm run up && npm test && npm run down</code>（需 Docker；約 3 分鐘）</td>
+    </tr>
+    <tr>
+      <td>CI</td>
+      <td><code>.github/workflows/</code></td>
+      <td><code>ci.yml</code> 跑 unit（matrix: ubuntu/windows × Node 18/20）；<code>integration.yml</code> path-filtered，只在 adapter / integration 變動時觸發</td>
+      <td>自動 — push 到 main / PR</td>
+    </tr>
+  </table>
+  <p>為什麼分兩層：unit 跑得快、隨時跑；integration 抓「driver 行為 × adapter SQL 形狀」邊角 case（例：MSSQL bracket `[users]` 在 <code>extractTableName</code> regex 上的解析、Mongo EJSON 在 Node 與 .NET 端的 byte-compatibility）。Integration 失敗時上傳 dumps + container logs 當 artifact，便於 debug。</p>
+</div>
+
+<div class="card">
+  <h2>性能 / 容量參考</h2>
+  <table>
+    <tr><th>規模</th><th>建議部署</th><th>應該夠用</th></tr>
+    <tr><td>&lt; 100 客戶</td><td>License Server: 1 vCPU / 512MB / 1GB SSD</td><td>每天上萬次 heartbeat 沒問題</td></tr>
+    <tr><td>100 ~ 5000</td><td>1 vCPU / 1GB / 10GB SSD（加 nginx rate limit）</td><td>需要監控 event_log 大小</td></tr>
+    <tr><td>&gt; 5000</td><td>升級到 PG / 加 read replica</td><td>SQLite WAL 仍可撐到萬級，再上要 PG</td></tr>
+  </table>
+</div>
+
+</main>
+</body>
+</html>

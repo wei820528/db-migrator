@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>操作手冊 - DB Migrator (Node.js 版)</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; margin: 0; background: #f5f6f8; color: #1f2937; line-height: 1.7; }
+  header { background: linear-gradient(135deg, #047857, #065f46); color: #fff; padding: 24px 32px; }
+  header h1 { margin: 0; font-size: 22px; }
+  nav.topnav { background: #064e3b; padding: 10px 32px; }
+  nav.topnav a { color: #a7f3d0; text-decoration: none; margin-right: 18px; font-size: 14px; font-weight: 500; }
+  nav.topnav a:hover { color: #fff; text-decoration: underline; }
+  nav.topnav a.active { color: #fff; border-bottom: 2px solid #34d399; padding-bottom: 4px; }
+  main { max-width: 1000px; margin: 28px auto; padding: 0 24px 60px; }
+  h2 { color: #047857; border-bottom: 2px solid #d1fae5; padding-bottom: 6px; margin-top: 36px; }
+  h3 { color: #065f46; margin-top: 28px; }
+  pre.cmd { background: #1f2937; color: #e5e7eb; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13px; }
+  code { background: #f3f4f6; padding: 1px 6px; border-radius: 3px; font-family: Consolas, monospace; font-size: 13px; color: #be123c; }
+  .step-block { background: #fff; border-radius: 8px; padding: 20px 24px; margin: 18px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .step-num { display: inline-block; background: #10b981; color: #fff; width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; font-weight: 700; margin-right: 8px; }
+  .info-box { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; margin: 12px 0; font-size: 14px; border-radius: 4px; }
+  .warn-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 12px 0; font-size: 14px; border-radius: 4px; }
+  .tip { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 10px 14px; margin: 12px 0; font-size: 13px; border-radius: 4px; }
+
+  /* ===== 模擬截圖樣式 ===== */
+  .screenshot { background: #f5f6f8; border: 1px solid #e5e7eb; border-radius: 10px; padding: 0; margin: 16px 0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .screenshot .browser-bar { background: #e5e7eb; padding: 8px 12px; display: flex; align-items: center; gap: 6px; }
+  .screenshot .browser-bar .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .screenshot .browser-bar .red { background: #ef4444; }
+  .screenshot .browser-bar .yellow { background: #f59e0b; }
+  .screenshot .browser-bar .green { background: #10b981; }
+  .screenshot .browser-bar .addr { background: #fff; flex: 1; padding: 4px 10px; border-radius: 4px; font-size: 12px; color: #4b5563; margin-left: 8px; font-family: Consolas, monospace; }
+  .app-body { background: #f5f6f8; padding: 0; }
+  .app-header { background: #1f2937; color: #fff; padding: 14px 22px; }
+  .app-header h2 { margin: 0; font-size: 18px; }
+  .app-main { padding: 18px; }
+  .ui-step { background: #fff; border-radius: 8px; padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .ui-step h3 { margin: 0 0 12px; font-size: 14px; color: #374151; }
+  .ui-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .ui-card { background: #fff; border: 2px solid #e5e7eb; border-radius: 6px; padding: 14px; cursor: pointer; text-align: left; }
+  .ui-card.selected { border-color: #3b82f6; background: #eff6ff; }
+  .ui-card .t { font-weight: 600; font-size: 13px; color: #111827; margin-bottom: 3px; }
+  .ui-card .s { font-size: 11px; color: #6b7280; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form-grid label { font-size: 12px; color: #4b5563; display: flex; flex-direction: column; }
+  .form-grid input { margin-top: 3px; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 3px; font-size: 13px; }
+  .btn { background: #3b82f6; color: #fff; border: 0; padding: 6px 14px; border-radius: 4px; font-size: 13px; cursor: pointer; display: inline-block; }
+  .btn.gray { background: #e5e7eb; color: #374151; }
+  .status-ok { color: #059669; font-size: 13px; margin-left: 10px; }
+  .status-err { color: #dc2626; font-size: 13px; margin-left: 10px; }
+  .tag { display: inline-block; padding: 2px 8px; background: #eff6ff; color: #1d4ed8; border-radius: 4px; font-size: 11px; margin-left: 6px; }
+  .mode-switch { margin-top: 14px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+  .mode-btn { background: #e5e7eb; color: #374151; padding: 6px 14px; border: 0; border-radius: 4px; margin-right: 6px; font-size: 13px; }
+  .mode-btn.active { background: #3b82f6; color: #fff; }
+  .table-list { max-height: 140px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 4px; padding: 6px 10px; margin: 8px 0; }
+  .table-list label { display: block; font-size: 12px; padding: 2px 0; }
+  .log-box { background: #111827; color: #d1d5db; padding: 10px 12px; border-radius: 4px; font-size: 11px; font-family: Consolas, monospace; max-height: 140px; overflow-y: auto; margin-top: 10px; white-space: pre-wrap; }
+  .diff-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  .diff-table th, .diff-table td { padding: 5px 10px; font-size: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+  .diff-table th { background: #f9fafb; }
+  .exists-yes { color: #b45309; font-weight: 500; }
+  .exists-no { color: #059669; }
+  .caption { text-align: center; font-size: 13px; color: #6b7280; margin-top: 6px; font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📘 操作手冊 - DB Migrator (Node.js 版)</h1>
+</header>
+<nav class="topnav">
+  <a href="../index.html">總覽</a>
+  <a href="index.html">本版首頁</a>
+  <a href="操作手冊.html" class="active">操作手冊</a>
+  <a href="function對照.html">Function 對照</a>
+  <a href="UI說明.html">UI 解析</a>
+  <a href="修改指南.html">修改指南</a>
+</nav>
+<main>
+
+<h2>🚀 第一次啟動</h2>
+
+<div class="step-block">
+  <h3><span class="step-num">1</span>確認 Node.js 版本</h3>
+  <p>需要 Node.js 18 以上版本。在 PowerShell 或 cmd 執行：</p>
+  <pre class="cmd">node --version</pre>
+  <p>若版本低於 v18.0.0，請至 <a href="https://nodejs.org/">nodejs.org</a> 下載安裝 LTS 版。</p>
+</div>
+
+<div class="step-block">
+  <h3><span class="step-num">2</span>安裝套件（第一次才需要）</h3>
+  <pre class="cmd">cd F:\匯出資料庫的bat\node-express
+npm install</pre>
+  <div class="warn-box">
+    <strong>⚠️ 重要：</strong>第一次跑 <code>npm install</code> 時 <code>better-sqlite3</code> 會做 native build。<br>
+    Windows 上若失敗，請先安裝 <strong>Visual Studio Build Tools</strong>（含 C++ 桌面開發工作負載）。<br>
+    若不需要用 SQLite，可以從 <code>package.json</code> 拿掉 <code>better-sqlite3</code> 再 install。
+  </div>
+</div>
+
+<div class="step-block">
+  <h3><span class="step-num">3</span>啟動服務</h3>
+  <pre class="cmd">npm start</pre>
+  <p>看到下面這行表示成功：</p>
+  <pre class="cmd">DB migrator listening on http://localhost:3000</pre>
+  <p>用瀏覽器打開 <strong>http://localhost:3000</strong> 即可開始使用。</p>
+  <div class="tip">💡 開發模式可用 <code>npm run dev</code>，會在程式修改後自動重啟。</div>
+</div>
+
+<h2>🖥️ 使用畫面導覽（模擬截圖）</h2>
+
+<div class="step-block">
+  <h3><span class="step-num">1</span>選擇資料庫類型</h3>
+  <p>進入首頁，第一個動作就是「選資料庫」。點下對應的卡片即可。</p>
+
+  <div class="screenshot">
+    <div class="browser-bar">
+      <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+      <div class="addr">🔒 localhost:3000</div>
+    </div>
+    <div class="app-body">
+      <div class="app-header"><h2>資料庫匯出 / 匯入</h2></div>
+      <div class="app-main">
+        <div class="ui-step">
+          <h3>1. 選擇資料庫類型</h3>
+          <div class="ui-cards">
+            <div class="ui-card selected">
+              <div class="t">MySQL / MariaDB</div>
+              <div class="s">純 mysql2 driver</div>
+            </div>
+            <div class="ui-card">
+              <div class="t">PostgreSQL</div>
+              <div class="s">純 pg driver</div>
+            </div>
+            <div class="ui-card">
+              <div class="t">SQL Server</div>
+              <div class="s">純 mssql driver</div>
+            </div>
+            <div class="ui-card">
+              <div class="t">SQLite</div>
+              <div class="s">本機檔案</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">▲ 第 1 步：點 MySQL 卡片，被選中時邊框會變藍色</div>
+</div>
+
+<div class="step-block">
+  <h3><span class="step-num">2</span>輸入連線資訊並測試連線</h3>
+  <p>選完類型後，畫面下方會出現連線表單。Port 會依類型自動填入預設值（MySQL 3306、PostgreSQL 5432、SQL Server 1433）。</p>
+
+  <div class="screenshot">
+    <div class="browser-bar">
+      <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+      <div class="addr">🔒 localhost:3000</div>
+    </div>
+    <div class="app-body">
+      <div class="app-header"><h2>資料庫匯出 / 匯入</h2></div>
+      <div class="app-main">
+        <div class="ui-step">
+          <h3>2. 連線設定 <span class="tag">mysql</span></h3>
+          <div class="form-grid">
+            <label>Host <input value="127.0.0.1" /></label>
+            <label>Port <input value="3306" /></label>
+            <label>Database <input value="myapp_production" /></label>
+            <label>User <input value="root" /></label>
+            <label style="grid-column: 1 / -1;">Password <input type="password" value="••••••••" /></label>
+          </div>
+          <div style="margin-top: 12px;">
+            <button class="btn">連線測試</button>
+            <span class="status-ok">✓ 成功，8.0.36-MySQL Community Server</span>
+          </div>
+          <div class="mode-switch">
+            <button class="mode-btn active">匯出</button>
+            <button class="mode-btn">匯入</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">▲ 第 2 步：填入連線資訊後按「連線測試」，成功會顯示綠色版本訊息</div>
+
+  <div class="info-box">
+    <strong>選 SQLite 時表單會變不一樣：</strong>只剩一個「SQLite 檔案路徑」欄位，例如 <code>C:\data\app.db</code>。
+  </div>
+
+  <div class="warn-box">
+    <strong>常見錯誤：</strong>
+    <ul style="margin: 6px 0;">
+      <li><code>ECONNREFUSED 127.0.0.1:3306</code> → DB 服務沒啟動或 port 不對</li>
+      <li><code>Access denied for user</code> → 帳號密碼錯誤</li>
+      <li><code>Unknown database 'xxx'</code> → database 名稱錯誤</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step-block">
+  <h3><span class="step-num">3a</span>匯出資料庫</h3>
+  <p>連線測試通過後，資料表清單會自動載入。可以選「全部匯出」或「選擇資料表」。</p>
+
+  <div class="screenshot">
+    <div class="browser-bar">
+      <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+      <div class="addr">🔒 localhost:3000</div>
+    </div>
+    <div class="app-body">
+      <div class="app-header"><h2>資料庫匯出 / 匯入</h2></div>
+      <div class="app-main">
+        <div class="ui-step">
+          <h3>3. 匯出</h3>
+          <div style="font-size: 13px;">
+            <label style="margin-right: 16px;"><input type="radio" checked /> 全部匯出</label>
+            <label><input type="radio" /> 選擇資料表</label>
+          </div>
+          <div class="table-list" style="margin-top: 10px;">
+            <label><input type="checkbox" /> users <span style="color: #9ca3af;">(~12834)</span></label>
+            <label><input type="checkbox" /> orders <span style="color: #9ca3af;">(~58291)</span></label>
+            <label><input type="checkbox" /> products <span style="color: #9ca3af;">(~3402)</span></label>
+            <label><input type="checkbox" /> categories <span style="color: #9ca3af;">(~89)</span></label>
+            <label><input type="checkbox" /> order_items <span style="color: #9ca3af;">(~204512)</span></label>
+          </div>
+          <div style="font-size: 13px; margin-top: 8px;">
+            <label style="margin-right: 16px;"><input type="checkbox" /> 只匯出結構 (no data)</label>
+            <label><input type="checkbox" /> 只匯出資料 (no schema)</label>
+          </div>
+          <div style="margin-top: 12px;">
+            <button class="btn">開始匯出</button>
+          </div>
+          <div class="log-box">Dumping 5 table(s)
+&gt; users
+  users: 5000 rows...
+  users: 10000 rows...
+  users: 12834 rows done
+&gt; orders
+  orders: 5000 rows...
+  orders: 10000 rows...
+  ...
+Done</div>
+          <div style="margin-top: 10px;">
+            <a href="#" style="color: #3b82f6; font-size: 13px;">📥 下載 SQL 檔</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">▲ 第 3a 步：匯出進度即時顯示在黑色 log 區，完成後出現下載連結</div>
+
+  <div class="tip">
+    <strong>勾選說明：</strong>
+    <ul style="margin: 4px 0;">
+      <li><strong>只匯出結構</strong> = 只產生 CREATE TABLE，不包資料</li>
+      <li><strong>只匯出資料</strong> = 只產生 INSERT INTO，假設目標 DB 已有相同結構</li>
+      <li>兩個都不勾 = 完整匯出（結構 + 資料）</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step-block">
+  <h3><span class="step-num">3b</span>匯入資料庫</h3>
+  <p>切到「匯入」分頁，分兩步：先「檢查內容」再「執行匯入」。</p>
+
+  <div class="screenshot">
+    <div class="browser-bar">
+      <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+      <div class="addr">🔒 localhost:3000</div>
+    </div>
+    <div class="app-body">
+      <div class="app-header"><h2>資料庫匯出 / 匯入</h2></div>
+      <div class="app-main">
+        <div class="ui-step">
+          <h3>3. 匯入</h3>
+          <div style="font-size: 13px;">
+            <label>選擇 SQL 檔 <input type="file" /></label>
+            <button class="btn">檢查內容</button>
+          </div>
+          <div style="margin-top: 14px;">
+            <h4 style="font-size: 13px; margin: 0 0 6px;">資料表對照</h4>
+            <table class="diff-table">
+              <thead><tr><th></th><th>資料表</th><th>目標 DB 狀態</th></tr></thead>
+              <tbody>
+                <tr><td><input type="checkbox" checked /></td><td>users</td><td class="exists-yes">已存在（將覆寫）</td></tr>
+                <tr><td><input type="checkbox" checked /></td><td>orders</td><td class="exists-yes">已存在（將覆寫）</td></tr>
+                <tr><td><input type="checkbox" checked /></td><td>logs</td><td class="exists-no">不存在（新建）</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top: 12px;">
+            <button class="btn">執行匯入</button>
+          </div>
+          <div class="log-box">Executing 245.3 KB of SQL...
+Restore complete</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">▲ 第 3b 步：上傳 SQL 後會比對目標 DB，標示哪些表會被覆寫</div>
+
+  <div class="warn-box">
+    <strong>⚠️ 注意：</strong>
+    <ul style="margin: 4px 0;">
+      <li>目前的 dump 格式包含 <code>DROP TABLE IF EXISTS</code>，<strong>會直接刪掉</strong>目標 DB 上的同名表！</li>
+      <li>「已存在（將覆寫）」橘色字代表這個 table 的舊資料會消失</li>
+      <li>正式環境建議先做備份再執行</li>
+    </ul>
+  </div>
+</div>
+
+<h2>🛑 停止服務</h2>
+<p>在跑 <code>npm start</code> 的 PowerShell 視窗按 <strong>Ctrl + C</strong> 即可停止。<br>
+<code>tmp/</code> 內的暫存檔不會自動清理，可以定期手動清空（或設排程）。</p>
+
+<h2>🆘 疑難排解</h2>
+<table style="background: #fff;">
+  <tr><th style="background:#ecfdf5; padding:8px 12px;">症狀</th><th style="background:#ecfdf5; padding:8px 12px;">可能原因 / 解法</th></tr>
+  <tr><td style="padding:8px 12px; border-bottom:1px solid #e5e7eb;"><code>Cannot find module 'express'</code></td><td style="padding:8px 12px; border-bottom:1px solid #e5e7eb;">沒執行 <code>npm install</code></td></tr>
+  <tr><td style="padding:8px 12px; border-bottom:1px solid #e5e7eb;">port 3000 被佔用</td><td style="padding:8px 12px; border-bottom:1px solid #e5e7eb;">改用其他 port：<code>set PORT=4000 &amp;&amp; npm start</code></td></tr>
+  <tr><td style="padding:8px 12px; border-bottom:1px solid #e5e7eb;">匯出後檔案打不開</td><td style="padding:8px 12px; border-bottom:1px solid #e5e7eb;">用記事本打開檢查格式，若亂碼是編碼問題（應為 UTF-8）</td></tr>
+  <tr><td style="padding:8px 12px;">匯入時 timeout</td><td style="padding:8px 12px;">檔案太大；目前的限制是 1GB；超過要分批匯入</td></tr>
+</table>
+
+</main>
+</body>
+</html>

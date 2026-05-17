@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DB Migrator — 文件</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+           color: #1f2937; background: #f9fafb; line-height: 1.6; }
+
+    /* Layout */
+    .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+    aside { background: #1f2937; color: #cbd5e1; padding: 24px 16px; position: sticky; top: 0;
+            height: 100vh; overflow-y: auto; }
+    main { padding: 32px 48px; max-width: 920px; }
+
+    /* Sidebar */
+    aside h1 { color: white; font-size: 18px; margin: 0 0 4px; }
+    aside .ver { color: #9ca3af; font-size: 12px; margin-bottom: 24px; }
+    aside h2 { color: #f3f4f6; font-size: 13px; text-transform: uppercase; letter-spacing: .05em;
+               margin: 20px 0 6px; }
+    aside ul { list-style: none; padding: 0; margin: 0; }
+    aside li a { display: block; color: #cbd5e1; text-decoration: none; padding: 5px 8px;
+                 border-radius: 4px; font-size: 14px; }
+    aside li a:hover { background: rgba(255,255,255,.08); color: white; }
+    aside li a.active { background: #3b82f6; color: white; }
+    aside .back { display: inline-block; margin-top: 24px; padding: 6px 12px; background: rgba(255,255,255,.1);
+                  color: #cbd5e1; text-decoration: none; border-radius: 4px; font-size: 13px; }
+    aside .back:hover { background: rgba(255,255,255,.2); color: white; }
+
+    /* Main content */
+    main h1 { font-size: 28px; margin: 0 0 8px; color: #111827; }
+    main h2 { font-size: 22px; margin: 40px 0 8px; padding-top: 12px; color: #111827;
+              border-top: 2px solid #e5e7eb; }
+    main h2:first-of-type { border-top: 0; padding-top: 0; }
+    main h3 { font-size: 17px; margin: 24px 0 8px; color: #1f2937; }
+    main h4 { font-size: 15px; margin: 16px 0 6px; color: #374151; }
+    main p { margin: 8px 0; }
+    main code { background: #f3f4f6; padding: 1px 6px; border-radius: 3px; font-size: 13px;
+                font-family: "Cascadia Code", Consolas, monospace; color: #be185d; }
+    main pre { background: #1f2937; color: #e5e7eb; padding: 14px 18px; border-radius: 6px;
+               overflow-x: auto; font-size: 13px; line-height: 1.5; }
+    main pre code { background: transparent; color: inherit; padding: 0; }
+    main table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+    main th, main td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #e5e7eb;
+                       vertical-align: top; }
+    main th { background: #f3f4f6; font-weight: 600; }
+    main blockquote { border-left: 4px solid #3b82f6; background: #eff6ff; margin: 12px 0;
+                      padding: 10px 16px; color: #1e3a8a; }
+    main blockquote.warn { border-color: #f59e0b; background: #fffbeb; color: #78350f; }
+    main blockquote.danger { border-color: #dc2626; background: #fef2f2; color: #991b1b; }
+    main ul, main ol { padding-left: 24px; }
+    main li { margin: 4px 0; }
+    main a { color: #2563eb; }
+    main a:hover { text-decoration: underline; }
+
+    /* Mobile */
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      aside { position: static; height: auto; }
+      main { padding: 20px; }
+    }
+
+    .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px;
+            font-weight: 600; margin-left: 6px; vertical-align: middle; }
+    .pill.node { background: #d1fae5; color: #065f46; }
+    .pill.dotnet { background: #ede9fe; color: #5b21b6; }
+    .pill.both { background: #fef3c7; color: #92400e; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+<aside>
+  <h1>DB Migrator</h1>
+  <div class="ver">使用手冊 + 開發者文件</div>
+
+  <h2>使用手冊</h2>
+  <ul>
+    <li><a href="#install">系統需求 & 安裝</a></li>
+    <li><a href="#start">啟動</a></li>
+    <li><a href="#ui">UI 流程概覽</a></li>
+    <li><a href="#mysql">連線 MySQL</a></li>
+    <li><a href="#postgres">連線 PostgreSQL</a></li>
+    <li><a href="#mssql">連線 SQL Server (含 SQLEXPRESS)</a></li>
+    <li><a href="#sqlite">連線 SQLite</a></li>
+    <li><a href="#supabase">連線 Supabase</a></li>
+    <li><a href="#multi">多資料庫匯出</a></li>
+    <li><a href="#export">匯出操作</a></li>
+    <li><a href="#import">匯入操作</a></li>
+    <li><a href="#presets">已儲存連線</a></li>
+    <li><a href="#trouble">疑難排解</a></li>
+  </ul>
+
+  <h2>開發者</h2>
+  <ul>
+    <li><a href="#arch">架構</a></li>
+    <li><a href="#api">REST API</a></li>
+    <li><a href="#add-db">加新 DB</a></li>
+    <li><a href="#limits">已知限制</a></li>
+    <li><a href="#security">安全性</a></li>
+  </ul>
+
+  <a class="back" href="../index.html">← 回到工具</a>
+</aside>
+
+<main>
+
+<h1>DB Migrator 文件</h1>
+<p>瀏覽器操作的資料庫匯出 / 匯入工具。支援 <b>MySQL、PostgreSQL、SQL Server、SQLite、Supabase</b>，純 driver 實作，不需安裝任何 DB CLI。</p>
+
+<!-- ==================== 安裝 ==================== -->
+<h2 id="install">系統需求 & 安裝</h2>
+
+<table>
+<tr><th>版本</th><th>需要</th></tr>
+<tr><td><b>Node.js 版</b><span class="pill node">Node</span></td><td>Node.js 18 以上</td></tr>
+<tr><td><b>.NET 8 版</b><span class="pill dotnet">.NET</span></td><td>.NET 8 SDK</td></tr>
+</table>
+
+<p>兩個版本功能完全一樣，前端 UI 也一樣，差別只在後端語言。</p>
+
+<h3>Node.js 版</h3>
+<pre><code>cd F:\匯出資料庫的bat\node-express
+npm install</code></pre>
+
+<blockquote class="warn">
+首次安裝 <code>better-sqlite3</code> 會做 native build。Windows 需要 Visual Studio Build Tools；不打算用 SQLite 可從 <code>package.json</code> 拿掉那一行。
+</blockquote>
+
+<h3>.NET 8 版</h3>
+<pre><code>cd F:\匯出資料庫的bat\dotnet8
+dotnet restore</code></pre>
+
+<p>或直接用 Visual Studio / Rider 開 <code>DbMigrator.sln</code>，IDE 會自動 restore。</p>
+
+<!-- ==================== 啟動 ==================== -->
+<h2 id="start">啟動</h2>
+
+<h3>Node.js 版<span class="pill node">port 3000</span></h3>
+<pre><code>cd F:\匯出資料庫的bat\node-express
+npm start
+# DB migrator listening on http://localhost:3000</code></pre>
+
+<h3>.NET 8 版<span class="pill dotnet">port 3001</span></h3>
+<pre><code>cd F:\匯出資料庫的bat\dotnet8
+dotnet run
+# Now listening on: http://localhost:3001</code></pre>
+
+<p>停止：那個 PowerShell 視窗按 <code>Ctrl+C</code>。</p>
+
+<!-- ==================== UI 流程 ==================== -->
+<h2 id="ui">UI 流程概覽</h2>
+
+<pre><code>1. 選擇資料庫類型卡片（MySQL / PostgreSQL / SQL Server / SQLite / Supabase）
+        ↓
+2. 連線設定（Host + Port + User + Password；Database 不用填）
+        ↓
+   按「連線測試」
+        ↓
+2.5 自動列出該 server 上所有資料庫 → 用 checkbox 勾選
+        ↓
+3a. 匯出：勾 1 個 → 可選表；勾 2+ → 整個 DB 匯出，包成 zip
+3b. 匯入：上傳 .sql → 比對目標 DB → 執行</code></pre>
+
+<p>第一次開頁會自動跳出新手指引，9 步走完整流程。要再叫出來：右上角 <b>?</b> 鈕。</p>
+
+<!-- ==================== 連線範例 ==================== -->
+<h2 id="mysql">連線 MySQL / MariaDB</h2>
+
+<table>
+<tr><th>欄位</th><th>範例</th></tr>
+<tr><td>Host</td><td><code>127.0.0.1</code>、<code>db.example.com</code>、AWS RDS endpoint</td></tr>
+<tr><td>Port</td><td><code>3306</code></td></tr>
+<tr><td>User</td><td><code>root</code> 或自建帳號</td></tr>
+<tr><td>Password</td><td>對應密碼</td></tr>
+</table>
+
+<blockquote>
+雲端 DB：填服務商給的 endpoint，記得在資安群組（AWS Security Group / GCP firewall）放行你跑這個 app 的 IP，且 user 的 host 權限要允許從外面連（例如 <code>'user'@'%'</code>）。
+</blockquote>
+
+<h2 id="postgres">連線 PostgreSQL</h2>
+
+<table>
+<tr><th>欄位</th><th>範例</th></tr>
+<tr><td>Host</td><td><code>127.0.0.1</code>、<code>db.example.com</code></td></tr>
+<tr><td>Port</td><td><code>5432</code></td></tr>
+<tr><td>User</td><td><code>postgres</code> 或自建 role</td></tr>
+<tr><td>Password</td><td>對應密碼</td></tr>
+</table>
+
+<p>連線測試會用 <code>postgres</code> DB 連入，列出所有非 template 的 database。</p>
+
+<h2 id="mssql">連線 SQL Server (含 SQLEXPRESS)</h2>
+
+<h3>預先準備：開啟 TCP/IP（重要）</h3>
+<p>SQL Express 預設<b>沒開 TCP/IP</b>，要先開：</p>
+<ol>
+  <li>開 <b>SQL Server Configuration Manager</b></li>
+  <li><b>SQL Server Network Configuration → Protocols for SQLEXPRESS</b> → 把 <b>TCP/IP</b> 改成 Enabled</li>
+  <li><b>SQL Server Services</b> → 重啟 <code>SQL Server (SQLEXPRESS)</code>，確認 <code>SQL Server Browser</code> 是 Running（如果用 instance 名稱連線）</li>
+  <li>Windows 防火牆放行 1433（內網連才需要；本機連跳過）</li>
+</ol>
+
+<blockquote class="warn">
+SSMS 預設用 Shared Memory 連本機，不需要 TCP/IP；我們的工具走 <code>tedious</code> driver，<b>只支援 TCP/IP</b>。所以 SSMS 連得到 ≠ 本工具連得到。
+</blockquote>
+
+<h3>Server 欄位格式</h3>
+<table>
+<tr><th>格式</th><th>範例</th><th>何時用</th></tr>
+<tr><td><code>HOST</code></td><td><code>192.168.1.50</code></td><td>預設 instance + 預設 port</td></tr>
+<tr><td><code>HOST,PORT</code></td><td><code>192.168.1.50,1433</code></td><td>預設 instance + 自訂 port</td></tr>
+<tr><td><code>HOST\INSTANCE</code></td><td><code>DESKTOP-PNPEK4O\SQLEXPRESS</code></td><td>命名 instance（靠 SQL Browser 解析 port）</td></tr>
+<tr><td><code>HOST\INSTANCE,PORT</code></td><td><code>DESKTOP-PNPEK4O\SQLEXPRESS,1434</code></td><td>命名 instance + 自訂 port</td></tr>
+</table>
+
+<h3>驗證模式</h3>
+
+<h4>A. SQL Server 帳號</h4>
+<p>裝 SQLEXPRESS 時要勾「Mixed Mode」並設過 sa 密碼才有：</p>
+<table>
+<tr><td>Server</td><td><code>DESKTOP-PNPEK4O\SQLEXPRESS</code></td></tr>
+<tr><td>驗證方式</td><td>SQL Server 帳號</td></tr>
+<tr><td>User</td><td><code>sa</code></td></tr>
+<tr><td>Password</td><td>你設的密碼</td></tr>
+</table>
+
+<h4>B. Windows 帳號</h4>
+<blockquote class="warn">.NET 版和 Node 版行為不同，請看清楚</blockquote>
+
+<p><b>.NET 版</b> — 用啟動 dotnet 那個 process 的 Windows 帳號（IntegratedSecurity）：</p>
+<table>
+<tr><td>驗證方式</td><td>Windows 帳號</td></tr>
+<tr><td>User / Password</td><td>留空（被忽略）</td></tr>
+</table>
+<p>適合本機跑 dotnet、連本機 SQLEXPRESS。</p>
+
+<p><b>Node 版</b> — 用 NTLM，需要明確的 Windows 帳密：</p>
+<table>
+<tr><td>驗證方式</td><td>Windows 帳號</td></tr>
+<tr><td>User</td><td><code>DESKTOP-PNPEK4O\你的Windows帳號</code></td></tr>
+<tr><td>Password</td><td>那組 Windows 密碼</td></tr>
+</table>
+
+<h2 id="sqlite">連線 SQLite</h2>
+
+<table>
+<tr><td>SQLite 檔案路徑</td><td><code>C:\data\app.db</code>、<code>F:\projects\test.sqlite</code></td></tr>
+</table>
+
+<blockquote>
+路徑必須是<b>跑 web app 那台機器</b>上看得到的本機路徑。沒辦法直接匯入瀏覽器端的 .db 檔。
+</blockquote>
+
+<h2 id="supabase">連線 Supabase</h2>
+
+<p>Supabase 底層是 PostgreSQL + 強制 TLS。本工具的 Supabase 卡片自動：路由到 postgres adapter、強制 SSL、預設值適合 Supabase 工作流。</p>
+
+<h3>取得連線資訊</h3>
+<p>到 <b>Supabase Dashboard → Project Settings → Database</b>：</p>
+<table>
+<tr><td>Host</td><td><code>db.&lt;project-ref&gt;.supabase.co</code></td></tr>
+<tr><td>Port</td><td><code>5432</code>（Direct connection）</td></tr>
+<tr><td>Database</td><td><code>postgres</code></td></tr>
+<tr><td>User</td><td><code>postgres</code></td></tr>
+<tr><td>Password</td><td>你在 Supabase 設的 DB password</td></tr>
+</table>
+
+<blockquote class="warn">
+DB 密碼是<b>單獨</b>設定的（不是登入 Supabase 的密碼）。在 Database 那頁有「Reset database password」按鈕，重設一次就會給你看，存好。
+</blockquote>
+
+<blockquote class="danger">
+不要用 Pooler endpoint（<code>aws-0-*.pooler.supabase.com:6543</code>）跑 dump / restore，會把 prepared statements 搞亂。要用 <b>Direct connection</b>。
+</blockquote>
+
+<h3>IPv6 注意</h3>
+<p>免費方案的 Direct 連線是 IPv6-only。你的網路沒 IPv6 連不上的話，要去 dashboard 開「IPv4 add-on」（要錢）或想其他辦法。</p>
+
+<!-- ==================== 多資料庫匯出 ==================== -->
+<h2 id="multi">多資料庫匯出</h2>
+
+<p>連線測試成功後會跳出「<b>2.5 選擇資料庫</b>」section，列出 server 上所有資料庫的 checkbox：</p>
+
+<pre><code>2.5 選擇資料庫       已選 3 個
+
+[全選] [全不選]   勾 1 個 → 可進一步選表；勾 2 個以上 → 整個 DB 匯出，輸出 zip
+
+☐ master
+☑ northwind
+☑ adventureworks
+☑ wcy
+☐ tempdb_dev</code></pre>
+
+<table>
+<tr><th>勾選數</th><th>結果</th></tr>
+<tr><td>0</td><td>「開始匯出」按鈕會擋下來</td></tr>
+<tr><td>1</td><td>下方自動載入 table 清單，可勾「選擇資料表」做部分匯出</td></tr>
+<tr><td>2+</td><td>整個 DB 匯出（個別 table 選項自動 disable），下載一個 zip 內含每個 DB 一個 .sql</td></tr>
+</table>
+
+<!-- ==================== 匯出 ==================== -->
+<h2 id="export">匯出操作</h2>
+
+<ol>
+  <li>連線測試成功後，2.5 區塊勾選要匯的 DB</li>
+  <li>切到「匯出」分頁（預設就在這）</li>
+  <li>選擇匯出範圍（單 DB 才有此選項）：
+    <ul>
+      <li><b>全部匯出</b>：整個 DB 一個 SQL 檔</li>
+      <li><b>選擇資料表</b>：勾選要的 table</li>
+    </ul>
+  </li>
+  <li>進階選項（兩個 checkbox 二擇一或都不勾）：
+    <ul>
+      <li><b>只匯出結構</b> (no data)：只有 <code>CREATE TABLE</code></li>
+      <li><b>只匯出資料</b> (no schema)：只有 <code>INSERT</code></li>
+    </ul>
+  </li>
+  <li>按「開始匯出」</li>
+  <li>黑底 log 區會跑進度，完成後出現「下載檔案」連結</li>
+</ol>
+
+<h3>檔案放在哪？</h3>
+<ul>
+  <li>Node：<code>F:\匯出資料庫的bat\node-express\tmp\&lt;jobId&gt;\</code></li>
+  <li>.NET：<code>F:\匯出資料庫的bat\dotnet8\bin\Debug\net8.0\tmp\&lt;jobId&gt;\</code></li>
+</ul>
+<p>目前不會自動清，定期手動清掉。</p>
+
+<!-- ==================== 匯入 ==================== -->
+<h2 id="import">匯入操作</h2>
+
+<ol>
+  <li>同樣先選 DB 類型 → 填連線 → 連線測試</li>
+  <li>2.5 區塊只勾<b>一個</b>目標 DB</li>
+  <li>切到「匯入」分頁</li>
+  <li>選 SQL 檔（自己之前匯出的或別處給你的）</li>
+  <li>按「檢查內容」</li>
+  <li>出現對照表：
+    <ul>
+      <li>綠色「不存在（新建）」→ 安全</li>
+      <li>黃色「已存在（將覆寫）」→ 注意，會被 DROP+CREATE 覆寫</li>
+    </ul>
+  </li>
+  <li>確認後按「執行匯入」</li>
+</ol>
+
+<blockquote class="warn">
+目前限制：對照表的 checkbox <b>還沒真的篩選 table</b>，按下執行匯入會跑整份檔。要部分匯入請先用文字編輯器把不要的部分刪掉，或在源頭匯出時就只勾要的 table。
+</blockquote>
+
+<!-- ==================== 已儲存連線 ==================== -->
+<h2 id="presets">已儲存連線（最近使用）</h2>
+
+<p>連線測試成功會自動把該組設定（不含 database）存到瀏覽器 localStorage，下次點同樣的卡片自動帶最近成功的那組。連線設定區頂端會出現「最近使用」下拉，可以存最多 10 組不同連線：</p>
+
+<pre><code>最近使用：[ sa@DESKTOP-PNPEK4O\SQLEXPRESS  ▼ ]   [刪除這筆]
+         [ root@10.0.0.5                  ]
+         [ postgres@db.xxx.supabase.co 🪟  ]</code></pre>
+
+<blockquote class="warn">
+帳密以<b>明文</b>存於瀏覽器 localStorage。共用電腦或重要環境記得手動清掉：F12 console → <code>localStorage.removeItem('dbmigrator.connections.v1')</code>
+</blockquote>
+
+<!-- ==================== 疑難排解 ==================== -->
+<h2 id="trouble">疑難排解</h2>
+
+<h3>連線測試失敗</h3>
+<table>
+<tr><th>錯誤訊息</th><th>原因</th><th>解法</th></tr>
+<tr><td><code>ECONNREFUSED</code></td><td>DB 沒開、port 錯</td><td>確認 DB service 在跑、port 對</td></tr>
+<tr><td><code>ETIMEDOUT</code></td><td>防火牆擋、安全群組沒放行</td><td>開放對應 port、加 IP 白名單</td></tr>
+<tr><td>MySQL <code>Access denied</code></td><td>帳密錯</td><td>重填</td></tr>
+<tr><td>PG <code>password authentication failed</code></td><td>帳密錯</td><td>重填</td></tr>
+<tr><td>MSSQL <code>Login failed</code></td><td>帳密錯 / Mixed Mode 沒開</td><td>確認 SQL Server 驗證模式</td></tr>
+<tr><td>MSSQL <code>Could not find the requested instance</code></td><td>SQL Browser 沒跑 / TCP 沒開</td><td>看上面 SQL Server 預先準備</td></tr>
+<tr><td>SQLite <code>unable to open database file</code></td><td>路徑不存在 / 沒權限</td><td>確認檔案存在或路徑可寫</td></tr>
+<tr><td>Supabase <code>SSL/TLS required</code></td><td>用了 PostgreSQL 卡片連 Supabase</td><td>改用 Supabase 卡片（會自動啟用 SSL）</td></tr>
+</table>
+
+<h3>瀏覽器 console 顯示「失敗：undefined」</h3>
+<p>表示 server 端沒回 <code>error</code> 欄位（通常是請求 body 反序列化失敗）。已修復，但若還碰到：</p>
+<ol>
+  <li>F12 → Network → 點失敗那個 request → Response 看實際內容</li>
+  <li>Server 端 console 會印 <code>[connection/test] failed:</code> 詳細訊息</li>
+</ol>
+
+<h3>找不到「？」按鈕</h3>
+<p>清快取重整：<code>Ctrl+F5</code>。要把「已看過指引」記錄清掉重跑：</p>
+<pre><code>localStorage.removeItem('dbmigrator.tourSeen.v1')</code></pre>
+
+<!-- ==================== 開發者：架構 ==================== -->
+<h2 id="arch">架構<span class="pill both">兩版相同</span></h2>
+
+<pre><code>┌─────────────────────┐
+│  Browser (UI)        │  HTML + 純 JS, 無 framework
+│  index.html          │  Cards / form / DB checkbox / table picker
+│  app.js              │  fetch API; localStorage presets; tour
+│  tour.js             │  互動式新手指引
+└──────────┬──────────┘
+           │  HTTPS / fetch JSON
+           ▼
+┌─────────────────────────────────────────────┐
+│  Web Server                                  │
+│  ┌──────────────────┐ ┌──────────────────┐  │
+│  │ Routes /         │ │ Adapters         │  │
+│  │ Controllers      │ │ ┌──────────────┐ │  │
+│  │  /api/connection │ │ │ MySQL        │ │  │
+│  │  /api/export     │─┼─│ PostgreSQL   │ │  │
+│  │  /api/import     │ │ │ SQL Server   │ │  │
+│  │  /api/jobs       │ │ │ SQLite       │ │  │
+│  └──────────────────┘ │ │ (Supabase)   │ │  │
+│  ┌──────────────────┐ │ └──────────────┘ │  │
+│  │ Job Service      │ └──────────────────┘  │
+│  │ (in-memory map)  │                        │
+│  └──────────────────┘                        │
+└──────────┬──────────────────────────────────┘
+           │  driver protocol
+           ▼
+     [ Target DB ]</code></pre>
+
+<h3>關鍵概念</h3>
+<ul>
+  <li><b>Adapter 介面</b>：每種 DB 實作 5 個方法（testConnection / listTables / dump / restore / parseTableNamesFromDump）</li>
+  <li><b>Job</b>：匯出 / 匯入是長時間任務，背景跑、回 jobId、前端 polling <code>/api/jobs/:id</code></li>
+  <li><b>Tmp dir</b>：匯出檔放 <code>tmp/&lt;jobId&gt;/</code>，多 DB 包成 <code>dumps.zip</code>；上傳的匯入檔放 <code>tmp/uploads/</code>（用完即刪）</li>
+  <li><b>Streaming</b>：dump 用串流（SELECT * → DataReader / QueryStream），不會把整張表 load 到記憶體</li>
+</ul>
+
+<!-- ==================== 開發者：API ==================== -->
+<h2 id="api">REST API</h2>
+
+<table>
+<tr><th>Method</th><th>Path</th><th>說明</th></tr>
+<tr><td>POST</td><td>/api/connection/test</td><td>測連線；回 version + databases[]（SQLite 只回 version）</td></tr>
+<tr><td>POST</td><td>/api/connection/tables</td><td>列出某 DB 的資料表</td></tr>
+<tr><td>POST</td><td>/api/export</td><td>啟動匯出 job，回 jobId</td></tr>
+<tr><td>GET</td><td>/api/export/:id/file</td><td>下載單 DB 的 .sql</td></tr>
+<tr><td>GET</td><td>/api/export/:id/zip</td><td>下載多 DB 的 dumps.zip</td></tr>
+<tr><td>POST</td><td>/api/import/inspect</td><td>上傳 SQL，比對目標 DB</td></tr>
+<tr><td>POST</td><td>/api/import/run</td><td>啟動匯入 job</td></tr>
+<tr><td>GET</td><td>/api/jobs/:id</td><td>查 job 狀態 / 進度 / 結果</td></tr>
+</table>
+
+<h3>POST /api/connection/test</h3>
+<pre><code>// 一般 (MySQL/PG/MSSQL)
+{ "type": "mysql", "host": "127.0.0.1", "port": 3306, "user": "root", "password": "..." }
+
+// MSSQL with Windows auth
+{ "type": "mssql", "host": "DESKTOP-PNPEK4O\\SQLEXPRESS", "user": "", "password": "", "authMode": "windows" }
+
+// SQLite
+{ "type": "sqlite", "path": "C:\\data\\app.db" }
+
+// Supabase (postgres + ssl=true)
+{ "type": "supabase", "host": "db.xxx.supabase.co", "port": 5432, "user": "postgres", "password": "...", "ssl": true }
+
+// 回應
+{ "ok": true, "version": "PostgreSQL 15.x ...", "databases": ["postgres", "myapp"] }
+// 失敗
+{ "ok": false, "error": "..." }</code></pre>
+
+<h3>POST /api/export</h3>
+<pre><code>{
+  "type": "mysql",
+  "connection": { "host": "...", "port": 3306, "user": "...", "password": "..." },
+  "databases": ["db1", "db2"],
+  "options": { "tables": [], "noData": false, "noSchema": false }
+}
+
+// 回應
+{ "jobId": "uuid..." }
+
+// poll /api/jobs/:id 直到 status === "done"
+{
+  "id": "uuid...",
+  "status": "done",
+  "result": { "downloadUrl": "/api/export/.../zip", "count": 2 }
+}</code></pre>
+
+<!-- ==================== 開發者：加新 DB ==================== -->
+<h2 id="add-db">加新 DB</h2>
+
+<h3>Node 版</h3>
+<ol>
+  <li><code>npm install &lt;driver-package&gt;</code></li>
+  <li>建 <code>adapters/yyy.js</code>，照其他 adapter 的結構實作 5 個方法</li>
+  <li>到 <code>adapters/index.js</code> 註冊：<code>const yyy = require('./yyy'); adapters.yyy = yyy;</code></li>
+</ol>
+
+<h3>.NET 版</h3>
+<ol>
+  <li><code>&lt;PackageReference Include="..."&gt;</code> 加 NuGet</li>
+  <li>建 <code>Adapters/YyyAdapter.cs</code> 實作 <code>IDatabaseAdapter</code></li>
+  <li>到 <code>AdapterRegistry</code> 建構式註冊：<code>["yyy"] = new YyyAdapter()</code></li>
+</ol>
+
+<h3>前端</h3>
+<ul>
+  <li>到 <code>public/index.html</code> 加新卡片：<code>&lt;button class="card" data-type="yyy" data-port="..."&gt;...&lt;/button&gt;</code></li>
+  <li>到 <code>app.js</code> 的 <code>TYPE_DEFAULTS</code> 跟 <code>HOST_HINTS</code> 加對應 entry</li>
+</ul>
+
+<!-- ==================== 已知限制 ==================== -->
+<h2 id="limits">已知限制</h2>
+
+<table>
+<tr><th>項目</th><th>純 driver 版（本工具）</th><th>原生 dump 工具（mysqldump/pg_dump/sqlcmd）</th></tr>
+<tr><td>表結構（基本）</td><td>✅ 欄位 / 型別 / PK / 預設值 / nullable / IDENTITY</td><td>✅</td></tr>
+<tr><td>資料</td><td>✅ 串流批次 INSERT</td><td>✅</td></tr>
+<tr><td>外鍵約束</td><td>❌ 不在 CREATE TABLE 內</td><td>✅</td></tr>
+<tr><td>次要索引</td><td>⚠️ SQLite 有，其他無</td><td>✅</td></tr>
+<tr><td>Triggers</td><td>❌</td><td>✅</td></tr>
+<tr><td>Stored procedures / functions</td><td>❌</td><td>✅</td></tr>
+<tr><td>Views</td><td>❌（被當成 BASE TABLE 跳過）</td><td>✅</td></tr>
+<tr><td>Sequences (PG)</td><td>❌</td><td>✅</td></tr>
+<tr><td>Events (MySQL)</td><td>❌</td><td>✅</td></tr>
+</table>
+
+<p>一般 application DB 用前兩項就夠。要做 enterprise 級的完整匯出再加上面這些 SQL 查詢就好（PG 的 <code>pg_get_constraintdef</code>、MSSQL 的 <code>sys.foreign_keys</code> 等）。</p>
+
+<h3>其他</h3>
+<ul>
+  <li>匯入時 UI 上的 table 勾選 <b>還沒真的篩選</b>，會跑整份檔</li>
+  <li>密碼明文存於 localStorage</li>
+  <li>沒有 auth / rate limit / audit log — 別直接上公網</li>
+  <li>匯出 tmp 檔不會自動清</li>
+</ul>
+
+<!-- ==================== 安全性 ==================== -->
+<h2 id="security">安全性</h2>
+
+<blockquote class="danger">
+  本工具<b>沒有 auth</b>。任何能連到這個 web app 的人都能 dump / restore 任何他能連到的 DB。<b>絕對不要直接上公網</b>。
+</blockquote>
+
+<p>外露前最少要做：</p>
+<ul>
+  <li>HTTPS（Caddy / nginx 反向代理或 Cloudflare Tunnel）</li>
+  <li>登入機制（最少 basic auth）</li>
+  <li>Rate limit（防止暴力測 DB 帳密）</li>
+  <li>Audit log（誰在什麼時候連到什麼 DB、做了什麼）</li>
+  <li>限制可連的目標 DB（白名單 host）</li>
+</ul>
+
+<h3>已做的防護</h3>
+<ul>
+  <li>所有 DB 操作走 driver，<b>沒有用 shell 拼接</b>，無 command injection</li>
+  <li>SQL 操作用 parameterized query（adapter 內部）</li>
+  <li>上傳檔限制 1GB，存於 tmp/uploads，匯入完自動刪</li>
+  <li>SQL Server / PostgreSQL / Supabase 都驗證 server 但不驗 cert（為了 Supabase managed cert 方便；正式環境應該 bundle CA）</li>
+</ul>
+
+<p style="margin: 60px 0 20px; color: #9ca3af; font-size: 12px; text-align: center;">
+DB Migrator · 文件最後更新 2026-05
+</p>
+
+</main>
+</div>
+
+<script>
+  // Highlight active section in sidebar based on scroll position
+  const sections = [...document.querySelectorAll('main h2[id]')];
+  const links = [...document.querySelectorAll('aside a[href^="#"]')];
+  function update() {
+    const scrollY = window.scrollY + 100;
+    let current = sections[0]?.id;
+    for (const s of sections) {
+      if (s.offsetTop <= scrollY) current = s.id;
+    }
+    links.forEach((a) => a.classList.toggle('active', a.getAttribute('href') === '#' + current));
+  }
+  window.addEventListener('scroll', update);
+  window.addEventListener('load', update);
+
+  // Smooth scroll
+  links.forEach((a) => a.addEventListener('click', (e) => {
+    const id = a.getAttribute('href').slice(1);
+    const el = document.getElementById(id);
+    if (!el) return;
+    e.preventDefault();
+    history.replaceState(null, '', '#' + id);
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+</script>
+</body>
+</html>

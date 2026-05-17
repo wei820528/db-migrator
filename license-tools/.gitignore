@@ -1,0 +1,3 @@
+# NEVER commit private keys or issued licenses
+private-key.pem
+*.key

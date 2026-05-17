@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>操作文件 — DB Migrator</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<script src="docs-nav.js"></script>
+<div class="hero">
+  <h1>🛠️ 操作文件</h1>
+  <p>日常運維手冊：起 / 停 / 部署、資料備份、Admin 任務（建帳號、改 plan、查 IP）、疑難排解。</p>
+  <a class="back" href="index.html">← 文件首頁</a>
+</div>
+<main>
+
+<div class="card">
+  <h2>🚀 啟動三件元件</h2>
+  <h3>① License Server</h3>
+  <pre><code>cd F:\匯出資料庫的bat\license-server
+npm install         # 第一次
+npm start
+# License server listening on http://localhost:4000
+# Admin UI:  http://localhost:4000/admin/</code></pre>
+
+  <h3>② DB Migrator (Node)</h3>
+  <pre><code>cd F:\匯出資料庫的bat\node-express
+npm install         # 第一次
+$env:LICENSE_MODE = "online"
+$env:LICENSE_SERVER_URL = "http://localhost:4000"
+npm start
+# DB migrator listening on http://localhost:3000</code></pre>
+
+  <h3>③ DB Migrator (.NET)</h3>
+  <pre><code>cd F:\匯出資料庫的bat\dotnet8
+dotnet restore      # 第一次
+$env:LICENSE_MODE = "online"
+$env:LICENSE_SERVER_URL = "http://localhost:4000"
+dotnet run
+# Now listening on: http://localhost:3001</code></pre>
+
+  <p>停止：在對應 PowerShell 視窗按 <code>Ctrl+C</code>。</p>
+</div>
+
+<div class="card">
+  <h2>🧑‍💼 Admin 常用任務</h2>
+
+  <h3>建立新使用者</h3>
+  <pre><code>cd F:\匯出資料庫的bat\license-server
+
+# 試用 (7 天 / 1 台)
+node admin-cli.js create-user --email a@b.com --password trial1234
+
+# Basic (1 台 / 到 2027-12-31)
+node admin-cli.js create-user --email a@b.com --password mypass1234 --plan basic --expires 2027-12-31
+
+# Team (5 台 / 到 2027-12-31)
+node admin-cli.js create-user --email team@b.com --password mypass1234 --plan team --expires 2027-12-31</code></pre>
+
+  <h3>列出 / 查詢</h3>
+  <pre><code>node admin-cli.js list-users               # 所有使用者一覽
+node admin-cli.js list-sessions             # 目前在線
+node admin-cli.js list-sessions --email a@b.com   # 特定使用者的 session
+node admin-cli.js list-events --limit 100  # 最近事件
+node admin-cli.js list-events --email a@b.com</code></pre>
+
+  <h3>修改 plan / 延長期限</h3>
+  <pre><code>node admin-cli.js set-plan --email a@b.com --plan team --devices 5 --expires 2028-12-31</code></pre>
+
+  <h3>強制踢出登入</h3>
+  <pre><code>node admin-cli.js kick-all --email a@b.com</code></pre>
+
+  <h3>重新給試用</h3>
+  <pre><code>node admin-cli.js reset-trial --email a@b.com</code></pre>
+
+  <h3>撤銷（停用）</h3>
+  <pre><code>node admin-cli.js revoke --email a@b.com   # expires=now + 踢所有 session</code></pre>
+
+  <h3>刪除</h3>
+  <pre><code>node admin-cli.js delete-user --email a@b.com</code></pre>
+
+  <div class="note">Web 版 admin UI 在 <code>http://localhost:4000/admin/</code>，按鈕點點看就行。</div>
+</div>
+
+<div class="card">
+  <h2>📦 客戶第一次使用</h2>
+  <ol>
+    <li>客戶到你網站 / app 開啟 DB Migrator</li>
+    <li>右上角 🔑 圖示 → 「註冊試用」 → 填 email + password (≥ 8 字元)</li>
+    <li>收到驗證信，點連結啟用</li>
+    <li>回到 app，按「登入」</li>
+    <li>banner 顯示「⏳ 試用中 — 剩 7 天」</li>
+    <li>使用流程：選 DB 卡片 → 填連線 → 連線測試 → 勾資料庫 → 匯出/匯入</li>
+  </ol>
+  <p>試用版限制：</p>
+  <ul>
+    <li>只能 1 台同時使用</li>
+    <li>多 DB 一次匯出被擋（只能勾 1 個）</li>
+    <li>專案備份功能 disabled</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>💾 備份 license-server 資料</h2>
+  <h3>每天備份（手動）</h3>
+  <pre><code># PowerShell
+$date = Get-Date -Format "yyyy-MM-dd"
+Copy-Item "F:\匯出資料庫的bat\license-server\license.db" `
+          "F:\backups\license-$date.db"</code></pre>
+
+  <h3>每天備份（cron / 工作排程）</h3>
+  <pre><code># Linux cron
+0 3 * * * sqlite3 /var/lib/license-server/license.db ".backup /backups/license-$(date +\%F).db"</code></pre>
+
+  <h3>還原</h3>
+  <pre><code># 停止 license server
+# 取代 license.db 檔
+# 重啟 license server</code></pre>
+
+  <div class="warn">SQLite 用 WAL 模式 — 備份時還會有 <code>license.db-wal</code>、<code>license.db-shm</code>。最安全是 server 停掉後再 cp。</div>
+</div>
+
+<div class="card">
+  <h2>🌐 部署到 VPS（推薦 Caddy + systemd）</h2>
+  <ol>
+    <li>VPS 裝 Node.js 18+、git、Caddy</li>
+    <li><code>git clone</code> 整個專案到 <code>/opt/license-server</code></li>
+    <li>進去 <code>npm install --production</code></li>
+    <li>建 systemd unit：<code>/etc/systemd/system/license-server.service</code>
+      <pre><code>[Unit]
+Description=DB Migrator License Server
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/license-server
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+Environment=PORT=4000
+Environment=LICENSE_DB=/var/lib/license-server/license.db
+Environment=PUBLIC_BASE_URL=https://license.your-domain.com
+Environment=SMTP_HOST=smtp.sendgrid.net SMTP_PORT=587
+Environment=SMTP_USER=apikey SMTP_PASS=YOUR_KEY SMTP_FROM=no-reply@your-domain.com
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+    </li>
+    <li>啟動：<code>systemctl enable --now license-server</code></li>
+    <li>Caddy 設反向代理 + 自動 HTTPS：
+      <pre><code># /etc/caddy/Caddyfile
+license.your-domain.com {
+  reverse_proxy localhost:4000
+}</code></pre>
+    </li>
+    <li>客戶端的 <code>LICENSE_SERVER_URL</code> 改成 <code>https://license.your-domain.com</code></li>
+  </ol>
+</div>
+
+<div class="card">
+  <h2>🔁 更新部署</h2>
+  <pre><code>cd /opt/license-server
+git pull
+npm install --production
+systemctl restart license-server</code></pre>
+  <div class="note">Schema 變動會在啟動時自動 migrate（<code>db.js</code> 的 <code>addColumnIfMissing</code>），不會弄壞舊資料。但仍建議升級前備份。</div>
+</div>
+
+<div class="card">
+  <h2>🐞 疑難排解</h2>
+
+  <h3>客戶說「無法登入」</h3>
+  <table>
+    <tr><th>檢查</th><th>怎麼看</th><th>怎麼修</th></tr>
+    <tr><td>License server 是否在跑</td><td><code>curl https://license.your-domain.com/api/health</code></td><td>沒回就重啟服務</td></tr>
+    <tr><td>客戶的 LICENSE_SERVER_URL 對不對</td><td>看他 PowerShell <code>echo $env:LICENSE_SERVER_URL</code></td><td>跟他講正確 URL</td></tr>
+    <tr><td>帳號是否存在</td><td><code>node admin-cli.js list-users | grep email</code></td><td>不在就建</td></tr>
+    <tr><td>email 是否已驗證</td><td>list-users 看 email_verified</td><td>手動設 1 或重寄驗證信</td></tr>
+    <tr><td>是否被 IP 白名單擋</td><td><code>list-events --email ... --limit 20</code> 看「login_blocked」</td><td>清空 ip_whitelist 或加新 IP</td></tr>
+    <tr><td>plan 是否過期</td><td>list-users 看 expires_at</td><td><code>set-plan --expires</code> 延長</td></tr>
+    <tr><td>是否被踢</td><td>看「kicked」事件</td><td>kick-all 重置或叫客戶重新登入</td></tr>
+  </table>
+
+  <h3>客戶說「IP 一直變被踢」</h3>
+  <p>常見場景：</p>
+  <ul>
+    <li>使用者用手機熱點 / 跨 WiFi → IP 真的會變</li>
+    <li>公司用 NAT 出口 → IP 偶爾輪替</li>
+    <li>客戶端跑在 docker / 容器 → 看到的 IP 不是真實 IP</li>
+  </ul>
+  <p>解法：</p>
+  <ul>
+    <li>把 user 的 <code>max_devices</code> 加大（例如 3）→ 容忍 IP 短時間 churn</li>
+    <li>給該用戶設 IP whitelist（範圍 CIDR）→ 在範圍內的 IP 換不會被踢（注意：目前 IP 變動還是會踢，這個 whitelist 只是限定哪些 IP 可以用，後續可改）</li>
+    <li>請客戶找穩定 IP 環境</li>
+  </ul>
+
+  <h3>License server 噴錯 / 503</h3>
+  <ul>
+    <li>看 <code>journalctl -u license-server -n 200</code></li>
+    <li>SQLite lock 衝突：通常 WAL 模式不會有，但若多進程同寫會。檢查是否同時跑兩個 server.js</li>
+    <li>Disk full：<code>df -h</code></li>
+  </ul>
+
+  <h3>Email 發不出去</h3>
+  <ul>
+    <li>SMTP 變數有沒有設？sender domain 是否在 SPF / DKIM 通過？</li>
+    <li>用 <code>swaks</code> 從伺服器 manual 測 SMTP</li>
+    <li>退而求其次：dev mode 印 console，從 log 撈連結手動給</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>📋 月維護清單</h2>
+  <ul>
+    <li>檢查 license.db 大小，超過 100MB 跑 <code>VACUUM</code></li>
+    <li>清掉超過 90 天的 event_log（手動 SQL：<code>DELETE FROM event_log WHERE at &lt; date('now', '-90 days')</code>）</li>
+    <li>巡 license-server log，看有沒有重複的 login_blocked / kicked 案例（可能是某客戶網路有問題，主動聯繫）</li>
+    <li>SSL 憑證是否快過期（Caddy 自動續，但有時候會壞）</li>
+    <li>備份檔輪替 — 例：保留最近 30 天</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>🔐 安全檢查清單（季度）</h2>
+  <ul>
+    <li>npm / dotnet 套件是否有 CVE：<code>npm audit</code> / <code>dotnet list package --vulnerable</code></li>
+    <li>SMTP / Stripe / DB 密碼是否輪替？</li>
+    <li>Admin 帳號密碼是否強？</li>
+    <li>有沒有不該有的 firewall 開放 port？</li>
+    <li>nginx / Caddy 是否最新版？</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>🆘 緊急 — 大規模誤踢 / 全部使用者被擋</h2>
+  <ol>
+    <li>第一時間：開 <code>LICENSE_MODE=disabled</code> 在客戶端臨時放行（如果你能控制客戶端 env）</li>
+    <li>License server 端：找出 root cause（看 events / 看 logs）</li>
+    <li>修正後：取消 <code>disabled</code>，正常運作</li>
+    <li>事後：對受影響的客戶 reset_trial 補償，或在 license server 給 free_until 一週</li>
+  </ol>
+</div>
+
+</main>
+</body>
+</html>

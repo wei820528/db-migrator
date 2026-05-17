@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>Function 對照 - DB Migrator (.NET 8 版)</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; margin: 0; background: #f5f6f8; color: #1f2937; line-height: 1.7; }
+  header { background: linear-gradient(135deg, #1e40af, #1e3a8a); color: #fff; padding: 24px 32px; }
+  header h1 { margin: 0; font-size: 22px; }
+  nav.topnav { background: #1e3a8a; padding: 10px 32px; }
+  nav.topnav a { color: #bfdbfe; text-decoration: none; margin-right: 18px; font-size: 14px; font-weight: 500; }
+  nav.topnav a:hover { color: #fff; text-decoration: underline; }
+  nav.topnav a.active { color: #fff; border-bottom: 2px solid #60a5fa; padding-bottom: 4px; }
+  main { max-width: 1100px; margin: 28px auto; padding: 0 24px 60px; }
+  h2 { color: #1e40af; border-bottom: 2px solid #dbeafe; padding-bottom: 6px; margin-top: 36px; }
+  h3 { color: #1e3a8a; margin-top: 28px; background: #dbeafe; padding: 8px 14px; border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; background: #fff; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  th { background: #dbeafe; color: #1e3a8a; font-weight: 600; }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-family: Consolas, monospace; font-size: 12px; color: #be123c; }
+  pre { background: #1f2937; color: #e5e7eb; padding: 12px 16px; border-radius: 6px; overflow-x: auto; font-size: 12px; line-height: 1.55; }
+  pre .kw { color: #c4b5fd; }
+  pre .str { color: #86efac; }
+  pre .cm { color: #9ca3af; font-style: italic; }
+  pre .fn { color: #fbbf24; }
+  pre .ty { color: #93c5fd; }
+  .toc { background: #fff; padding: 16px 20px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 24px; }
+  .toc a { color: #1e40af; text-decoration: none; display: inline-block; margin-right: 18px; font-size: 13px; }
+  .toc a:hover { text-decoration: underline; }
+  .file-anchor { background: #1f2937; color: #fbbf24; padding: 4px 10px; border-radius: 4px; font-family: Consolas, monospace; font-size: 12px; }
+  .note { background: #fef3c7; border-left: 3px solid #f59e0b; padding: 8px 12px; margin: 8px 0; font-size: 13px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔧 Function / Method 對照表 - DB Migrator (.NET 8 版)</h1>
+</header>
+<nav class="topnav">
+  <a href="../index.html">總覽</a>
+  <a href="index.html">本版首頁</a>
+  <a href="操作手冊.html">操作手冊</a>
+  <a href="function對照.html" class="active">Function 對照</a>
+  <a href="UI說明.html">UI 解析</a>
+  <a href="修改指南.html">修改指南</a>
+</nav>
+<main>
+
+<div class="toc">
+  <strong>快速跳轉：</strong>
+  <a href="#program">Program.cs</a>
+  <a href="#models">Models</a>
+  <a href="#jobservice">JobService</a>
+  <a href="#interface">IDatabaseAdapter</a>
+  <a href="#registry">AdapterRegistry</a>
+  <a href="#sqlhelpers">SqlHelpers</a>
+  <a href="#conn-ctrl">ConnectionController</a>
+  <a href="#exp-ctrl">ExportController</a>
+  <a href="#imp-ctrl">ImportController</a>
+  <a href="#jobs-ctrl">JobsController</a>
+  <a href="#mysql">MySqlAdapter</a>
+  <a href="#pg">PostgresAdapter</a>
+  <a href="#mssql">MsSqlAdapter</a>
+  <a href="#sqlite">SqliteAdapter</a>
+</div>
+
+<h2 id="program">📄 Program.cs <span class="file-anchor">啟動點</span></h2>
+<pre><span class="kw">var</span> builder = WebApplication.<span class="fn">CreateBuilder</span>(args);
+builder.Services.<span class="fn">AddSingleton</span>&lt;<span class="ty">JobService</span>&gt;();         <span class="cm">// DI 註冊：全 process 共用</span>
+builder.Services.<span class="fn">AddSingleton</span>&lt;<span class="ty">AdapterRegistry</span>&gt;();     <span class="cm">// DI 註冊：adapter 表</span>
+builder.Services.<span class="fn">AddControllers</span>();                  <span class="cm">// 啟用 MVC controller</span>
+
+<span class="kw">var</span> app = builder.<span class="fn">Build</span>();
+Directory.<span class="fn">CreateDirectory</span>(...);                       <span class="cm">// 建 tmp 與 tmp/uploads</span>
+app.<span class="fn">UseDefaultFiles</span>();                                <span class="cm">// 自動找 index.html</span>
+app.<span class="fn">UseStaticFiles</span>();                                 <span class="cm">// serve wwwroot</span>
+app.<span class="fn">MapControllers</span>();                                 <span class="cm">// 啟用 attribute routing</span>
+app.<span class="fn">Run</span>();</pre>
+
+<h2 id="models">📄 Models/ConnectionInfo.cs <span class="file-anchor">所有 DTO</span></h2>
+<table>
+  <tr><th>類別</th><th>欄位</th><th>用途</th></tr>
+  <tr><td><code>DbConnectionInfo</code></td><td>Host / Port / Database / User / Password / Path</td><td>連線資訊。SQLite 用 Path，其他用前 5 個</td></tr>
+  <tr><td><code>TableInfo</code></td><td>Name / RowEstimate</td><td>列 table 的回傳值</td></tr>
+  <tr><td><code>ExportOptions</code></td><td>Tables[] / NoData / NoSchema</td><td>匯出時的選項</td></tr>
+  <tr><td><code>ExportRequest</code></td><td>Type / Connection / Options</td><td>POST /api/export 的 body</td></tr>
+  <tr><td><code>ImportRunRequest</code></td><td>Type / Connection / UploadId</td><td>POST /api/import/run 的 body</td></tr>
+  <tr><td><code>TableDiff</code></td><td>Name / ExistsInTarget</td><td>inspect 的比對結果</td></tr>
+</table>
+
+<h2 id="jobservice">📄 Services/JobService.cs <span class="file-anchor">記憶體型 Job Tracker</span></h2>
+<table>
+  <tr><th>類別 / Method</th><th>說明</th></tr>
+  <tr><td><code>Job</code> (POCO)</td><td>欄位：Id, Kind, Status, Progress, Result, Error, CreatedAt</td></tr>
+  <tr><td><code>JobProgress</code></td><td>單一進度項：T (timestamp) + Line (文字)</td></tr>
+  <tr><td><code>JobService.Create(kind)</code></td><td>產 GUID、建 Job 物件、放進 <code>ConcurrentDictionary</code>，回傳</td></tr>
+  <tr><td><code>JobService.Get(id)</code></td><td>找不到回 <code>null</code>（用 <code>TryGetValue</code>）</td></tr>
+  <tr><td><code>JobService.Append(id, line)</code></td><td>把一行進度加進 Progress；超過 200 筆自動丟最舊；用 <code>lock</code> 保護</td></tr>
+  <tr><td><code>JobService.SetStatus(id, status, patch)</code></td><td>更新 status，並可選擇用 Action&lt;Job&gt; 修改其他欄位（result/error）</td></tr>
+</table>
+<div class="note">
+  ✨ <code>ConcurrentDictionary</code> 是執行緒安全的，配合 <code>lock</code> 保護 Progress 串列，多個 background task 同時寫不會出問題。<br>
+  ⚠️ 沒有 expire 機制（不像 node 版有 setInterval 清舊 job）— 若需要要自己加 BackgroundService。
+</div>
+
+<h2 id="interface">📄 Adapters/IDatabaseAdapter.cs <span class="file-anchor">Adapter 介面</span></h2>
+<pre><span class="kw">public interface</span> <span class="ty">IDatabaseAdapter</span>
+{
+    <span class="kw">string</span> Type { <span class="kw">get</span>; }
+    Task&lt;(<span class="kw">bool</span>, <span class="kw">string</span>, <span class="kw">string</span>?)&gt; <span class="fn">TestConnectionAsync</span>(DbConnectionInfo conn);
+    Task&lt;List&lt;<span class="ty">TableInfo</span>&gt;&gt; <span class="fn">ListTablesAsync</span>(DbConnectionInfo conn);
+    Task <span class="fn">DumpAsync</span>(DbConnectionInfo conn, ExportOptions options, <span class="kw">string</span> outFilePath, Action&lt;<span class="kw">string</span>&gt;? onProgress, CancellationToken ct);
+    Task <span class="fn">RestoreAsync</span>(DbConnectionInfo conn, <span class="kw">string</span> sqlFilePath, Action&lt;<span class="kw">string</span>&gt;? onProgress, CancellationToken ct);
+    List&lt;<span class="kw">string</span>&gt; <span class="fn">ParseTableNamesFromDump</span>(<span class="kw">string</span> sqlFilePath);
+}</pre>
+<div class="note">這是合約 — 加新 DB 時的 class 必須實作這 6 個成員。</div>
+
+<h2 id="registry">📄 Adapters/AdapterRegistry <span class="file-anchor">同檔案</span></h2>
+<pre><span class="kw">public class</span> <span class="ty">AdapterRegistry</span>
+{
+    <span class="kw">private readonly</span> Dictionary&lt;<span class="kw">string</span>, <span class="ty">IDatabaseAdapter</span>&gt; _map;
+
+    <span class="kw">public</span> <span class="fn">AdapterRegistry</span>()
+    {
+        _map = <span class="kw">new</span>(StringComparer.OrdinalIgnoreCase)   <span class="cm">// 大小寫不敏感</span>
+        {
+            [<span class="str">"mysql"</span>]    = <span class="kw">new</span> <span class="ty">MySqlAdapter</span>(),
+            [<span class="str">"postgres"</span>] = <span class="kw">new</span> <span class="ty">PostgresAdapter</span>(),
+            [<span class="str">"mssql"</span>]    = <span class="kw">new</span> <span class="ty">MsSqlAdapter</span>(),
+            [<span class="str">"sqlite"</span>]   = <span class="kw">new</span> <span class="ty">SqliteAdapter</span>(),
+        };
+    }
+
+    <span class="kw">public</span> <span class="ty">IDatabaseAdapter</span> <span class="fn">Get</span>(<span class="kw">string</span> type) { ... }   <span class="cm">// 找不到丟 InvalidOperationException</span>
+}</pre>
+
+<h2 id="sqlhelpers">📄 Adapters/SqlHelpers.cs <span class="file-anchor">共用工具</span></h2>
+<table>
+  <tr><th>Method</th><th>用途</th></tr>
+  <tr><td><code>Bracket(name)</code></td><td>用 <code>[ ]</code> 跳脫 identifier（T-SQL 風格）</td></tr>
+  <tr><td><code>DoubleQuote(name)</code></td><td>用雙引號跳脫（PostgreSQL / SQLite）</td></tr>
+  <tr><td><code>Backtick(name)</code></td><td>用反引號跳脫（MySQL）</td></tr>
+  <tr><td><code>EscapeAnsi(s)</code></td><td>ANSI 字串：<code>'a''b'</code></td></tr>
+  <tr><td><code>EscapeNPrefix(s)</code></td><td>SQL Server 字串：<code>N'...'</code>（支援 unicode）</td></tr>
+  <tr><td><code>EscapeMySql(s)</code></td><td>MySQL 字串：含 <code>\n \r \\ \' \"</code> 等跳脫</td></tr>
+  <tr><td><code>FormatOptions</code> 類別</td><td>把不同 DB 的格式差異打包：EscapeString、FormatBinary、BoolAs01</td></tr>
+  <tr><td><code>FormatValue(v, opts)</code></td><td>把 .NET 任意型別轉成 SQL 字面值（涵蓋 bool / 數字 / DateTime / Guid / byte[] / string / DBNull）</td></tr>
+  <tr><td><code>SplitSqlStatements(sql, q)</code></td><td>切句迭代器（IEnumerable）：處理注釋、字串內分號等</td></tr>
+  <tr><td><code>SplitMsSqlBatches(text)</code></td><td>MSSQL 特有：按 <code>GO</code> 行分批</td></tr>
+  <tr><td><code>ParseTableNamesFromDump(path, q)</code></td><td>regex 抓 CREATE TABLE 後的 table 名</td></tr>
+</table>
+
+<h2 id="conn-ctrl">📄 Controllers/ConnectionController.cs <span class="file-anchor">連線測試 + 列表</span></h2>
+<table>
+  <tr><th>路由</th><th>方法</th><th>說明</th></tr>
+  <tr>
+    <td><code>POST /api/connection/test</code></td><td>Test</td>
+    <td>把 <code>TestRequest</code>（含 Type + connection 欄位）丟給 adapter，回 ok + version 或 error</td>
+  </tr>
+  <tr>
+    <td><code>POST /api/connection/tables</code></td><td>Tables</td>
+    <td>呼 adapter.ListTablesAsync，回 <code>{ tables: [...] }</code></td>
+  </tr>
+</table>
+
+<h2 id="exp-ctrl">📄 Controllers/ExportController.cs <span class="file-anchor">匯出</span></h2>
+<table>
+  <tr><th>路由</th><th>方法</th><th>說明</th></tr>
+  <tr>
+    <td><code>POST /api/export</code></td><td>Start</td>
+    <td>1. 從 registry 拿 adapter<br>
+    2. <code>_jobs.Create("export")</code> 建 job<br>
+    3. 用 <code>Task.Run(...)</code> 在背景跑 <code>DumpAsync</code>（API 立刻回 jobId 不等待）<br>
+    4. 完成後設 status = "done" + downloadUrl</td>
+  </tr>
+  <tr>
+    <td><code>GET /api/export/{id}/file</code></td><td>Download</td>
+    <td>用 <code>PhysicalFile()</code> 串流送回 tmp/{id}/*.sql 第一個檔案</td>
+  </tr>
+</table>
+
+<h2 id="imp-ctrl">📄 Controllers/ImportController.cs <span class="file-anchor">匯入</span></h2>
+<table>
+  <tr><th>路由</th><th>方法</th><th>說明</th></tr>
+  <tr>
+    <td><code>POST /api/import/inspect</code></td><td>Inspect</td>
+    <td>multipart 上傳：<br>
+    - <code>[RequestSizeLimit]</code> 限 1GB<br>
+    - 把上傳檔存到 <code>tmp/uploads/{GUID}</code><br>
+    - <code>ParseTableNamesFromDump</code> 抓 dump 的 table 清單<br>
+    - 對比目標 DB 做 diff</td>
+  </tr>
+  <tr>
+    <td><code>POST /api/import/run</code></td><td>Run</td>
+    <td>用 <code>Task.Run</code> 背景跑 <code>RestoreAsync</code>；完成後刪掉上傳的暫存檔</td>
+  </tr>
+</table>
+
+<h2 id="jobs-ctrl">📄 Controllers/JobsController.cs <span class="file-anchor">進度查詢</span></h2>
+<table>
+  <tr><th>路由</th><th>方法</th><th>說明</th></tr>
+  <tr><td><code>GET /api/jobs/{id}</code></td><td>Get</td><td>回整個 Job 物件，找不到回 404</td></tr>
+</table>
+
+<h2 id="mysql">📄 Adapters/MySqlAdapter.cs <span class="file-anchor">MySQL</span></h2>
+<table>
+  <tr><th>Method</th><th>說明</th></tr>
+  <tr><td><code>BuildConnString(c, allowMultiple)</code></td><td>用 <code>MySqlConnectionStringBuilder</code> 組連線字串。restore 時要開 <code>AllowUserVariables</code></td></tr>
+  <tr><td><code>TestConnectionAsync</code></td><td>跑 <code>SELECT VERSION()</code></td></tr>
+  <tr><td><code>ListTablesAsync</code></td><td>查 information_schema.TABLES</td></tr>
+  <tr><td><code>EscapeIdent / EscapeString / FormatValue</code></td><td>MySQL 特有的字串/識別字處理（含 MySQL 跳脫如 <code>\n \r \\</code>）</td></tr>
+  <tr><td><code>DumpTableSchemaAsync</code></td><td>用 <code>SHOW CREATE TABLE</code> 拿到 DDL 直接寫進去</td></tr>
+  <tr><td><code>DumpTableDataAsync</code></td><td>用 <code>SequentialAccess</code> reader 串流；每 500 筆或 0.5MB flush 一批 INSERT</td></tr>
+  <tr><td><code>DumpAsync</code></td><td>主入口；schema 與 data 用不同 connection（避免 reader 衝突）</td></tr>
+  <tr><td><code>RestoreAsync</code></td><td>讀整個檔，用 <code>SplitSqlStatements</code> 切句，逐句執行</td></tr>
+  <tr><td><code>SplitSqlStatements</code> (private)</td><td>處理 MySQL 三種引號（<code>'</code> <code>"</code> <code>`</code>）的注釋與字串</td></tr>
+  <tr><td><code>ParseTableNamesFromDump</code></td><td>regex 抓 <code>CREATE TABLE `xxx`</code></td></tr>
+</table>
+
+<h2 id="pg">📄 Adapters/PostgresAdapter.cs <span class="file-anchor">PostgreSQL</span></h2>
+<table>
+  <tr><th>Method</th><th>說明</th></tr>
+  <tr><td><code>ConnString(c)</code></td><td>用 <code>NpgsqlConnectionStringBuilder</code> 組</td></tr>
+  <tr><td><code>TestConnectionAsync</code></td><td><code>SELECT version()</code></td></tr>
+  <tr><td><code>ListTablesAsync</code></td><td>查 information_schema.tables（排除 pg_catalog / information_schema）；用 <code>reltuples</code> 估算筆數</td></tr>
+  <tr><td><code>GetTableDDLAsync</code></td><td><strong>自己組 CREATE TABLE</strong>：查 information_schema.columns 與 pg_index 的 PK，逐欄串成 DDL</td></tr>
+  <tr><td><code>DumpTableDataAsync</code></td><td>用 NpgsqlDataReader + SequentialAccess 串流</td></tr>
+  <tr><td><code>DumpAsync / RestoreAsync</code></td><td>同 MySQL 概念，但 restore 必須逐句執行（PG 不支援 multipleStatements）</td></tr>
+</table>
+
+<h2 id="mssql">📄 Adapters/MsSqlAdapter.cs <span class="file-anchor">SQL Server</span></h2>
+<table>
+  <tr><th>Method</th><th>說明</th></tr>
+  <tr><td><code>ConnString(c)</code></td><td>用 <code>SqlConnectionStringBuilder</code>；Host 用 <code>host,port</code> 寫法</td></tr>
+  <tr><td><code>ListTablesAsync</code></td><td>查 sys.tables join sys.schemas（回 schema.name 格式）</td></tr>
+  <tr><td><code>GetTableDDLAsync</code></td><td>查 sys.columns + sys.types + sys.indexes 組 DDL；含 IDENTITY 與 default constraint 處理</td></tr>
+  <tr><td><code>DumpTableDataAsync</code></td><td>用 SqlDataReader.SequentialAccess</td></tr>
+  <tr><td><code>RestoreAsync</code></td><td>用 <code>SplitMsSqlBatches</code> 按 <code>GO</code> 切，每批用 <code>SqlCommand</code> 執行</td></tr>
+</table>
+
+<h2 id="sqlite">📄 Adapters/SqliteAdapter.cs <span class="file-anchor">SQLite</span></h2>
+<table>
+  <tr><th>Method</th><th>說明</th></tr>
+  <tr><td><code>PickPath(c)</code></td><td>從 <code>Path / Database / Host</code> 三選一拿檔案位置</td></tr>
+  <tr><td><code>ConnString(c, readOnly)</code></td><td>用 <code>SqliteConnectionStringBuilder</code>；指定 Mode</td></tr>
+  <tr><td><code>ListTablesAsync</code></td><td>查 <code>sqlite_master</code></td></tr>
+  <tr><td><code>DumpAsync</code></td><td>用 <code>sqlite_master.sql</code> 直接拿原始 DDL；資料用 reader iterate；<strong>會同時匯出 indexes</strong></td></tr>
+  <tr><td><code>RestoreAsync</code></td><td>包在自己的 BEGIN/COMMIT 內，逐句執行；遇到檔案內的 BEGIN/COMMIT 自動跳過避免衝突</td></tr>
+</table>
+
+<h2>📋 與 node-express 版的差異速查</h2>
+<table>
+  <tr><th>項目</th><th>node-express</th><th>dotnet8</th></tr>
+  <tr><td>Port</td><td>3000</td><td>3001</td></tr>
+  <tr><td>啟動指令</td><td><code>npm start</code></td><td><code>dotnet run</code></td></tr>
+  <tr><td>路由註冊</td><td><code>app.use()</code></td><td>Attribute routing</td></tr>
+  <tr><td>背景任務</td><td>Promise chain</td><td><code>Task.Run()</code></td></tr>
+  <tr><td>Job 儲存</td><td>JS Map（內建清理）</td><td>ConcurrentDictionary（無清理）</td></tr>
+  <tr><td>檔案串流</td><td>Node stream</td><td>StreamWriter + FileStream</td></tr>
+  <tr><td>取消支援</td><td>無</td><td>有 CancellationToken（但目前外部沒用到）</td></tr>
+</table>
+
+</main>
+</body>
+</html>

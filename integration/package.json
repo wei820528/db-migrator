@@ -1,0 +1,14 @@
+{
+  "name": "db-migrator-integration",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real-DB round-trip tests for all 7 adapters",
+  "scripts": {
+    "up": "docker compose up -d",
+    "down": "docker compose down -v",
+    "test": "node run.js",
+    "test:sql": "node run.js mysql postgres mssql sqlite",
+    "test:nosql": "node run.js mongo redis"
+  },
+  "engines": { "node": ">=18" }
+}

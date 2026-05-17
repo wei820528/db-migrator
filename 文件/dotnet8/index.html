@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>DB Migrator (.NET 8 版) - 交接文件</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif; margin: 0; background: #f5f6f8; color: #1f2937; line-height: 1.7; }
+  header { background: linear-gradient(135deg, #1e40af, #1e3a8a); color: #fff; padding: 28px 32px; }
+  header h1 { margin: 0 0 6px; font-size: 24px; }
+  header .sub { color: #bfdbfe; font-size: 14px; }
+  nav.topnav { background: #1e3a8a; padding: 10px 32px; }
+  nav.topnav a { color: #bfdbfe; text-decoration: none; margin-right: 18px; font-size: 14px; font-weight: 500; }
+  nav.topnav a:hover { color: #fff; text-decoration: underline; }
+  main { max-width: 980px; margin: 28px auto; padding: 0 24px 60px; }
+  h2 { color: #1e40af; border-bottom: 2px solid #dbeafe; padding-bottom: 6px; margin-top: 36px; }
+  h3 { color: #1e3a8a; margin-top: 28px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #e5e7eb; font-size: 14px; vertical-align: top; }
+  th { background: #dbeafe; color: #1e3a8a; font-weight: 600; }
+  code { background: #f3f4f6; padding: 1px 6px; border-radius: 3px; font-family: Consolas, "Courier New", monospace; font-size: 13px; color: #be123c; }
+  pre { background: #1f2937; color: #e5e7eb; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 16px 0; }
+  .doc-card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #3b82f6; }
+  .doc-card a { text-decoration: none; color: #1e40af; font-weight: 600; font-size: 16px; }
+  .doc-card p { margin: 8px 0 0; color: #4b5563; font-size: 13px; }
+  .badge { display: inline-block; background: #3b82f6; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 6px; vertical-align: middle; }
+  .info-box { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 14px 18px; margin: 16px 0; border-radius: 4px; }
+  .warn-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0; border-radius: 4px; }
+  .file-tree { background: #1f2937; color: #d1d5db; padding: 16px 20px; border-radius: 6px; font-family: Consolas, monospace; font-size: 13px; line-height: 1.7; }
+  .file-tree .dir { color: #60a5fa; }
+  .file-tree .file { color: #93c5fd; }
+  .file-tree .note { color: #9ca3af; font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>DB Migrator - .NET 8 / ASP.NET Core 版<span class="badge">交接文件</span></h1>
+  <div class="sub">資料庫匯出 / 匯入工具 · 純 ADO.NET driver · 不需要任何外部 CLI 工具</div>
+</header>
+<nav class="topnav">
+  <a href="../index.html">總覽</a>
+  <a href="index.html">本版首頁</a>
+  <a href="操作手冊.html">操作手冊</a>
+  <a href="function對照.html">Function 對照</a>
+  <a href="UI說明.html">UI 解析</a>
+  <a href="修改指南.html">修改指南</a>
+</nav>
+<main>
+
+<h2>專案概觀</h2>
+<p>這是用 <strong>.NET 8 / ASP.NET Core Web API</strong> 寫成的網頁工具，功能與 node-express 版完全相同（同 API、同 UI），只是技術 stack 換成 C#。<br>
+適合需要與既有 .NET 環境整合、或單一執行檔（self-contained publish）部署的情境。</p>
+
+<div class="info-box">
+  <strong>啟動指令：</strong>
+  <pre>cd F:\匯出資料庫的bat\dotnet8
+dotnet restore
+dotnet run        # 服務在 http://localhost:3001</pre>
+  或用 Visual Studio / Rider 開 <code>DbMigrator.sln</code> 然後 F5 執行。
+</div>
+
+<h2>檔案結構</h2>
+<div class="file-tree">
+<span class="dir">dotnet8/</span>
+├── <span class="file">DbMigrator.sln</span>              <span class="note">// Visual Studio 解決方案</span>
+├── <span class="file">DbMigrator.Web.csproj</span>       <span class="note">// 專案檔（含 NuGet 套件）</span>
+├── <span class="file">Program.cs</span>                  <span class="note">// 進入點，DI 註冊與 routing</span>
+├── <span class="file">appsettings.json</span>            <span class="note">// 設定檔，含 Kestrel port</span>
+├── <span class="dir">Controllers/</span>                 <span class="note">// 4 個 REST API controller</span>
+│   ├── <span class="file">ConnectionController.cs</span>  <span class="note">// 測試連線 / 列資料表</span>
+│   ├── <span class="file">ExportController.cs</span>      <span class="note">// 啟動匯出 / 下載檔</span>
+│   ├── <span class="file">ImportController.cs</span>      <span class="note">// 上傳 SQL / 啟動匯入</span>
+│   └── <span class="file">JobsController.cs</span>        <span class="note">// 查詢 job 狀態</span>
+├── <span class="dir">Adapters/</span>                    <span class="note">// 4 種資料庫各一個 adapter</span>
+│   ├── <span class="file">IDatabaseAdapter.cs</span>      <span class="note">// 介面 + AdapterRegistry</span>
+│   ├── <span class="file">SqlHelpers.cs</span>            <span class="note">// 共用 helpers</span>
+│   ├── <span class="file">MySqlAdapter.cs</span>          <span class="note">// MySQL/MariaDB（MySqlConnector）</span>
+│   ├── <span class="file">PostgresAdapter.cs</span>       <span class="note">// PostgreSQL（Npgsql）</span>
+│   ├── <span class="file">MsSqlAdapter.cs</span>          <span class="note">// SQL Server（Microsoft.Data.SqlClient）</span>
+│   └── <span class="file">SqliteAdapter.cs</span>         <span class="note">// SQLite（Microsoft.Data.Sqlite）</span>
+├── <span class="dir">Services/</span>
+│   └── <span class="file">JobService.cs</span>            <span class="note">// 記憶體型 job tracker（DI singleton）</span>
+├── <span class="dir">Models/</span>
+│   └── <span class="file">ConnectionInfo.cs</span>        <span class="note">// 所有 DTO（請求/回應 model）</span>
+├── <span class="dir">wwwroot/</span>                     <span class="note">// 前端 SPA（同 node-express/public）</span>
+│   ├── <span class="file">index.html</span>
+│   ├── <span class="file">app.js</span>
+│   └── <span class="file">style.css</span>
+└── <span class="dir">bin/Debug/net8.0/tmp/</span>         <span class="note">// 執行時產生：暫存目錄</span>
+</div>
+
+<h2>系統運作流程</h2>
+<table>
+  <tr><th>步驟</th><th>使用者動作</th><th>背後執行</th></tr>
+  <tr><td>1</td><td>選擇 DB 類型</td><td>前端 app.js 設定 <code>state.type</code></td></tr>
+  <tr><td>2</td><td>填連線資訊並按「連線測試」</td><td>POST <code>/api/connection/test</code> → <code>ConnectionController.Test</code> → <code>adapter.TestConnectionAsync</code></td></tr>
+  <tr><td>3</td><td>測試成功後自動拉資料表清單</td><td>POST <code>/api/connection/tables</code> → <code>ConnectionController.Tables</code> → <code>adapter.ListTablesAsync</code></td></tr>
+  <tr><td>4a</td><td>按「開始匯出」</td><td>POST <code>/api/export</code> → 建 job → <code>Task.Run</code> 背景跑 <code>adapter.DumpAsync</code></td></tr>
+  <tr><td>5a</td><td>前端每 0.8 秒輪詢進度</td><td>GET <code>/api/jobs/{id}</code> → 回 Job 物件</td></tr>
+  <tr><td>6a</td><td>完成後點下載連結</td><td>GET <code>/api/export/{id}/file</code> → <code>PhysicalFile()</code> 串流送回</td></tr>
+  <tr><td>4b</td><td>選 SQL 檔按「檢查內容」</td><td>POST <code>/api/import/inspect</code> → 解析 dump 並比對</td></tr>
+  <tr><td>5b</td><td>按「執行匯入」</td><td>POST <code>/api/import/run</code> → <code>adapter.RestoreAsync</code></td></tr>
+</table>
+
+<h2>NuGet 套件清單</h2>
+<table>
+  <tr><th>資料庫</th><th>NuGet 套件</th><th>命名空間</th></tr>
+  <tr><td>MySQL / MariaDB</td><td><code>MySqlConnector</code></td><td><code>MySqlConnector</code></td></tr>
+  <tr><td>PostgreSQL</td><td><code>Npgsql</code></td><td><code>Npgsql</code></td></tr>
+  <tr><td>SQL Server</td><td><code>Microsoft.Data.SqlClient</code></td><td><code>Microsoft.Data.SqlClient</code></td></tr>
+  <tr><td>SQLite</td><td><code>Microsoft.Data.Sqlite</code></td><td><code>Microsoft.Data.Sqlite</code></td></tr>
+</table>
+
+<h2>支援的資料庫</h2>
+<table>
+  <tr><th>類型</th><th>type 字串</th><th>預設 Port</th><th>主要 Adapter</th></tr>
+  <tr><td>MySQL / MariaDB</td><td><code>mysql</code></td><td>3306</td><td><code>MySqlAdapter.cs</code></td></tr>
+  <tr><td>PostgreSQL</td><td><code>postgres</code></td><td>5432</td><td><code>PostgresAdapter.cs</code></td></tr>
+  <tr><td>SQL Server</td><td><code>mssql</code></td><td>1433</td><td><code>MsSqlAdapter.cs</code></td></tr>
+  <tr><td>SQLite</td><td><code>sqlite</code></td><td>—（檔案）</td><td><code>SqliteAdapter.cs</code></td></tr>
+</table>
+
+<h2>DI / 依賴注入</h2>
+<p>在 <code>Program.cs</code> 註冊兩個 singleton：</p>
+<pre>builder.Services.AddSingleton&lt;JobService&gt;();
+builder.Services.AddSingleton&lt;AdapterRegistry&gt;();
+builder.Services.AddControllers();</pre>
+<p>Controllers 透過建構式注入這兩個服務，全 process 共用同一份 job 狀態與 adapter 表。</p>
+
+<h2>本版文件導覽</h2>
+<div class="card-grid">
+  <div class="doc-card">
+    <a href="操作手冊.html">📘 操作手冊</a>
+    <p>含模擬截圖的步驟教學，給第一次拿到工具的人快速上手。</p>
+  </div>
+  <div class="doc-card">
+    <a href="function對照.html">🔧 Function 對照表</a>
+    <p>每個 method 的用途、參數、回傳值、所在檔案行號。</p>
+  </div>
+  <div class="doc-card">
+    <a href="UI說明.html">🎨 UI 解析</a>
+    <p>前端 HTML 結構、CSS class、互動事件對應。</p>
+  </div>
+  <div class="doc-card">
+    <a href="修改指南.html">✏️ 修改指南</a>
+    <p>常見修改情境怎麼下手（換 port、加 DB、改樣式、加欄位等）。</p>
+  </div>
+</div>
+
+<h2>已知限制</h2>
+<div class="warn-box">
+與 node-express 版完全相同：
+<ul>
+  <li>❌ 外鍵約束（CREATE TABLE 內不會包含）</li>
+  <li>⚠️ 次要索引（SQLite 有，其他無）</li>
+  <li>❌ Triggers / Stored procedures / Functions / Views</li>
+  <li>❌ 沒有 auth — <strong>不要直接放上公網</strong></li>
+  <li>⚠️ job 存記憶體，<strong>process 重啟後狀態清空</strong>（要持久化請改用 SQLite 或 Redis）</li>
+</ul>
+</div>
+
+</main>
+</body>
+</html>

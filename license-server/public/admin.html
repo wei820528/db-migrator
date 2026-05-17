@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>License Server — Admin</title>
+<link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+
+<!-- ========== LOGIN SCREEN ========== -->
+<div id="login-screen" class="screen">
+  <div class="login-box">
+    <div class="logo-mini">DB</div>
+    <h1>License Server</h1>
+    <p class="subtitle">Admin 登入</p>
+    <form id="login-form">
+      <input type="email" id="login-email" placeholder="email" autocomplete="email" required />
+      <input type="password" id="login-password" placeholder="password" autocomplete="current-password" required />
+      <button type="submit">登入</button>
+    </form>
+    <p id="login-msg" class="msg"></p>
+  </div>
+</div>
+
+<!-- ========== APP SHELL ========== -->
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo-mini">DB</span>
+      <span>License Server / Admin</span>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="dashboard">📊 Dashboard</button>
+      <button class="tab" data-tab="users">👥 Users</button>
+      <button class="tab" data-tab="sessions">🟢 Sessions</button>
+      <button class="tab" data-tab="events">📜 Events</button>
+      <button class="tab" data-tab="licenses">🔑 Licenses</button>
+      <button class="tab" data-tab="settings">⚙ Settings</button>
+    </nav>
+    <div class="topbar-right">
+      <span id="me-email" class="muted"></span>
+      <button id="btn-logout" class="btn-ghost">登出</button>
+    </div>
+  </header>
+
+  <!-- Dashboard -->
+  <main id="tab-dashboard" class="tab-panel">
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-num" id="s-online">—</div><div class="stat-label">目前在線</div></div>
+      <div class="stat-card"><div class="stat-num" id="s-logins">—</div><div class="stat-label">24h 登入</div></div>
+      <div class="stat-card"><div class="stat-num" id="s-kicked">—</div><div class="stat-label">24h 被踢</div></div>
+      <div class="stat-card"><div class="stat-num" id="s-expiring">—</div><div class="stat-label">14 天內到期</div></div>
+    </div>
+    <div class="card">
+      <h2>各方案使用者數</h2>
+      <table id="plan-totals"><tbody></tbody></table>
+    </div>
+    <div class="card">
+      <h2>Stripe 整合</h2>
+      <div id="stripe-status"></div>
+    </div>
+  </main>
+
+  <!-- Users -->
+  <main id="tab-users" class="tab-panel" hidden>
+    <div class="toolbar">
+      <input id="users-search" placeholder="搜尋 email..." />
+      <button id="btn-refresh-users" class="btn-ghost">重新整理</button>
+      <button id="btn-new-user" class="btn-primary">+ 新增使用者</button>
+    </div>
+    <table id="users-table" class="data-table">
+      <thead>
+        <tr>
+          <th>Email</th><th>Plan</th><th>裝置</th><th>狀態</th><th>到期</th><th>在線</th><th>動作</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <!-- Sessions -->
+  <main id="tab-sessions" class="tab-panel" hidden>
+    <div class="toolbar">
+      <span class="muted" id="sessions-count"></span>
+      <button id="btn-refresh-sessions" class="btn-ghost">重新整理</button>
+    </div>
+    <table id="sessions-table" class="data-table">
+      <thead>
+        <tr><th>Email</th><th>IP</th><th>User Agent</th><th>登入</th><th>最後活動</th><th>動作</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <!-- Events -->
+  <main id="tab-events" class="tab-panel" hidden>
+    <div class="toolbar">
+      <input id="events-search" placeholder="搜尋 email..." />
+      <select id="events-limit">
+        <option value="100">最近 100</option>
+        <option value="500" selected>最近 500</option>
+        <option value="1000">最近 1000</option>
+      </select>
+      <button id="btn-refresh-events" class="btn-ghost">重新整理</button>
+    </div>
+    <table id="events-table" class="data-table">
+      <thead>
+        <tr><th>時間</th><th>事件</th><th>Email</th><th>IP</th><th>細節</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <!-- Licenses (offline-mode kill switch) -->
+  <main id="tab-licenses" class="tab-panel" hidden>
+    <div class="toolbar">
+      <select id="licenses-filter">
+        <option value="">全部</option>
+        <option value="active">仍有效</option>
+        <option value="revoked">已撤銷</option>
+      </select>
+      <span class="muted" id="licenses-count"></span>
+      <button id="btn-refresh-licenses" class="btn-ghost">重新整理</button>
+      <button id="btn-add-license" class="btn-primary">+ 註冊 license</button>
+    </div>
+    <p class="muted" style="margin:8px 0">
+      這裡管理 <b>offline mode</b> 的已發行 license（用 <code>license-tools/issue-license.js</code> 簽出來的 .key）。
+      標記撤銷後，client 下次 phone home（每 24 小時）會拒絕啟動。
+      公開列表：<code>GET /api/revocation/list</code>
+    </p>
+    <table id="licenses-table" class="data-table">
+      <thead>
+        <tr><th>License ID</th><th>Customer</th><th>Plan</th><th>到期</th><th>狀態</th><th>動作</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <!-- Settings -->
+  <main id="tab-settings" class="tab-panel" hidden>
+    <div class="card">
+      <h2>方案定義（唯讀）</h2>
+      <p class="muted">編輯 <code>license-server/plans.js</code> 後重啟生效</p>
+      <pre id="plans-json" class="code"></pre>
+    </div>
+    <div class="card">
+      <h2>環境變數</h2>
+      <ul>
+        <li><code>SMTP_HOST / PORT / USER / PASS / FROM</code> — email 驗證</li>
+        <li><code>STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET</code> — Stripe 整合</li>
+        <li><code>STRIPE_PRICE_BASIC / TEAM / ENTERPRISE</code> — 各 plan 對應 price ID</li>
+        <li><code>PUBLIC_BASE_URL</code> — 寄信和 Stripe 用</li>
+        <li><code>LICENSE_DB</code> — SQLite 檔位置</li>
+      </ul>
+    </div>
+  </main>
+</div>
+
+<!-- ========== USER EDIT MODAL ========== -->
+<div id="user-modal" class="modal" hidden>
+  <div class="modal-backdrop"></div>
+  <div class="modal-box">
+    <h2 id="user-modal-title">編輯使用者</h2>
+    <form id="user-form">
+      <input type="hidden" id="u-id" />
+      <label>Email <input type="email" id="u-email" required /></label>
+      <label>密碼 <input type="password" id="u-password" placeholder="（留空 = 不改）" autocomplete="new-password" /></label>
+      <div class="grid-2">
+        <label>方案
+          <select id="u-plan">
+            <option value="trial">trial</option>
+            <option value="basic">basic</option>
+            <option value="team">team</option>
+            <option value="enterprise">enterprise</option>
+          </select>
+        </label>
+        <label>裝置數 <input type="number" id="u-devices" min="1" /></label>
+      </div>
+      <label>到期日 <input type="datetime-local" id="u-expires" /></label>
+      <label>免費月份到 <input type="datetime-local" id="u-free-until" /></label>
+      <label>IP 白名單 (CIDR/wildcard，逗號分隔；空 = 不限)
+        <input type="text" id="u-whitelist" placeholder="例：1.2.3.4, 10.0.0.0/8, 192.168.*" />
+      </label>
+      <label>內部備註 <textarea id="u-notes" rows="2"></textarea></label>
+      <div class="form-row">
+        <label class="checkbox"><input type="checkbox" id="u-admin" /> 是 Admin</label>
+        <label class="checkbox"><input type="checkbox" id="u-verified" /> Email 已驗證</label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" id="btn-modal-close">取消</button>
+        <button type="button" class="btn-warn" id="btn-modal-kick">踢出全部裝置</button>
+        <button type="button" class="btn-warn" id="btn-modal-free">免費 30 天</button>
+        <button type="button" class="btn-danger" id="btn-modal-delete">刪除</button>
+        <button type="submit" class="btn-primary">儲存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========== ADD LICENSE MODAL ========== -->
+<div id="license-modal" class="modal" hidden>
+  <div class="modal-backdrop"></div>
+  <div class="modal-box">
+    <h2>註冊一張已發行的 license</h2>
+    <p class="muted">把 <code>license-tools/issue-license.js</code> 印出的 <code>lid</code> 與資料貼進來，之後就可以遠端撤銷。</p>
+    <form id="license-form">
+      <label>License ID (UUID, 必填) <input type="text" id="l-id" placeholder="例：c3a4...-...-..." required pattern="[0-9a-fA-F-]{36}" /></label>
+      <label>Customer <input type="text" id="l-customer" placeholder="例：Acme Inc" /></label>
+      <div class="grid-2">
+        <label>Plan
+          <select id="l-plan">
+            <option value="">（無）</option>
+            <option value="single">single</option>
+            <option value="team">team</option>
+            <option value="enterprise">enterprise</option>
+          </select>
+        </label>
+        <label>到期日 <input type="datetime-local" id="l-expires" /></label>
+      </div>
+      <label>備註 <textarea id="l-notes" rows="2"></textarea></label>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" id="btn-license-close">取消</button>
+        <button type="submit" class="btn-primary">註冊</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "name": "db-migrator-node",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Web-based DB export/import tool (MySQL adapter scaffold)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/shared.test.js test/encrypt.test.js test/revocation.test.js test/nosql.test.js test/marketplace.test.js test/routines.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.6",
+    "adm-zip": "^0.5.16",
+    "archiver": "^7.0.1",
+    "better-sqlite3": "^11.5.0",
+    "express": "^4.19.2",
+    "mssql": "^11.0.1",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.11.0",
+    "pg": "^8.13.0",
+    "pg-query-stream": "^4.7.0",
+    "simple-git": "^3.27.0",
+    "uuid": "^10.0.0"
+  },
+  "optionalDependencies": {
+    "mongodb": "^6.10.0",
+    "ioredis": "^5.4.1"
+  }
+}

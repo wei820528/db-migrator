@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>區塊參考 — DB Migrator</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<script src="docs-nav.js"></script>
+<div class="hero">
+  <h1>📦 區塊參考</h1>
+  <p>每個模組（route / adapter / service / lib）的快速參考卡。要快速找「這東西在哪、做什麼」就翻這裡。</p>
+  <a class="back" href="index.html">← 文件首頁</a>
+</div>
+<main>
+
+<div class="card">
+  <h2>頂層資料夾</h2>
+  <table>
+    <tr><th>路徑</th><th>用途</th></tr>
+    <tr><td><code>node-express/</code></td><td>DB Migrator Node.js 版完整原始碼</td></tr>
+    <tr><td><code>dotnet8/</code></td><td>DB Migrator .NET 8 版完整原始碼</td></tr>
+    <tr><td><code>license-server/</code></td><td>中央授權伺服器（管帳號 / session / 付款）</td></tr>
+    <tr><td><code>license-tools/</code></td><td><b>私用</b> — 產 Ed25519 keypair + 簽 offline license + 簽 plugin manifest</td></tr>
+    <tr><td><code>integration/</code></td><td>docker-compose × 6 DB；<code>run.js</code> 跑 adapter round-trip 測試（seed → dump → restore → verify）</td></tr>
+    <tr><td><code>文件/</code></td><td>頂層中文文件（含本檔）</td></tr>
+    <tr><td><code>.github/</code></td><td>Issue / PR templates + CI workflow（含 integration）</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>DB Migrator — Routes / Controllers</h2>
+  <table>
+    <tr><th>區塊</th><th>Node 檔案</th><th>.NET 檔案</th><th>用途</th></tr>
+    <tr>
+      <td><b>connection</b></td>
+      <td><code>routes/connection.js</code></td>
+      <td><code>Controllers/ConnectionController.cs</code></td>
+      <td>連線測試 + 列 databases + 列 tables</td>
+    </tr>
+    <tr>
+      <td><b>export</b></td>
+      <td><code>routes/export.js</code></td>
+      <td><code>Controllers/ExportController.cs</code></td>
+      <td>啟動匯出 job、下載檔案 / zip</td>
+    </tr>
+    <tr>
+      <td><b>import</b></td>
+      <td><code>routes/import.js</code></td>
+      <td><code>Controllers/ImportController.cs</code></td>
+      <td>上傳 SQL → inspect 對照 → 執行匯入</td>
+    </tr>
+    <tr>
+      <td><b>jobs</b></td>
+      <td><code>routes/jobs.js</code></td>
+      <td><code>Controllers/JobsController.cs</code></td>
+      <td>查 job 狀態 / 進度 / 結果</td>
+    </tr>
+    <tr>
+      <td><b>project</b></td>
+      <td><code>routes/project.js</code></td>
+      <td><code>Controllers/ProjectController.cs</code></td>
+      <td>備份 (code+db+storage) → backup.zip；還原</td>
+    </tr>
+    <tr>
+      <td><b>license</b></td>
+      <td><code>routes/license.js</code></td>
+      <td><code>Controllers/LicenseController.cs</code></td>
+      <td>授權狀態 + 上傳 key（offline）+ 登入註冊（online）+ revocation refresh</td>
+    </tr>
+    <tr>
+      <td><b>marketplace</b></td>
+      <td><code>routes/marketplace.js</code></td>
+      <td><code>Controllers/MarketplaceController.cs</code></td>
+      <td>從 GitHub URL 預覽 / 安裝 plugin；管理 trusted publishers；已安裝清單</td>
+    </tr>
+    <tr>
+      <td><b>modules</b></td>
+      <td>內建 in <code>server.js</code></td>
+      <td><code>Controllers/ModulesController.cs</code></td>
+      <td>所有 route + adapter + plugin 的健康狀態</td>
+    </tr>
+    <tr>
+      <td><b>plugins UI</b></td>
+      <td>內建 in <code>server.js</code></td>
+      <td><code>Controllers/PluginsController.cs</code></td>
+      <td><code>/api/plugins/ui</code> — plugin 貢獻的 cards / tabs</td>
+    </tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>DB Migrator — Adapters</h2>
+  <table>
+    <tr><th>Type</th><th>Node 檔案</th><th>.NET 檔案</th><th>用什麼 driver</th></tr>
+    <tr><td><code>mysql</code></td><td><code>adapters/mysql.js</code></td><td><code>Adapters/MySqlAdapter.cs</code></td><td><code>mysql2</code> / <code>MySqlConnector</code></td></tr>
+    <tr><td><code>postgres</code></td><td><code>adapters/postgres.js</code></td><td><code>Adapters/PostgresAdapter.cs</code></td><td><code>pg</code> + <code>pg-query-stream</code> / <code>Npgsql</code></td></tr>
+    <tr><td><code>mssql</code></td><td><code>adapters/mssql.js</code></td><td><code>Adapters/MsSqlAdapter.cs</code></td><td><code>mssql</code> (tedious) / <code>Microsoft.Data.SqlClient</code></td></tr>
+    <tr><td><code>sqlite</code></td><td><code>adapters/sqlite.js</code></td><td><code>Adapters/SqliteAdapter.cs</code></td><td><code>better-sqlite3</code> / <code>Microsoft.Data.Sqlite</code></td></tr>
+    <tr><td><code>supabase</code></td><td>(別名 → postgres)</td><td>(別名 → postgres)</td><td>同 postgres + 強制 SSL</td></tr>
+    <tr><td><code>mongo</code></td><td><code>adapters/mongo.js</code></td><td><code>Adapters/MongoAdapter.cs</code></td><td><code>mongodb</code> + <code>bson</code> / <code>MongoDB.Driver</code></td></tr>
+    <tr><td><code>redis</code></td><td><code>adapters/redis.js</code></td><td><code>Adapters/RedisAdapter.cs</code></td><td><code>ioredis</code> / <code>StackExchange.Redis</code></td></tr>
+  </table>
+  <p>SQL adapter 實作 5 個方法：<code>testConnection</code>、<code>listTables</code>、<code>dump</code>、<code>restore</code>、<code>parseTableNamesFromDump</code>。
+  NoSQL adapter（mongo / redis）多實作一個 <code>filterDumpByTables</code>（自家格式過濾；SQL 系列 fallback 到 <code>filterSqlByTables</code>）。
+  Mongo dump = JSONL events（header / collection / insert）+ EJSON canonical 保留 BSON 型別；Redis dump = redis-cli 風格 command 序列。
+  兩個 adapter 的 Node 與 .NET 格式 byte-compatible，可互相 restore。</p>
+
+  <table style="margin-top:14px;">
+    <tr><th>Adapter</th><th>tables</th><th>FK</th><th>indexes</th><th>triggers</th><th>views</th><th>procedures</th><th>functions</th><th>sequences</th><th>events</th></tr>
+    <tr><td><code>mysql</code></td>     <td>✓</td><td>✓<small>*</small></td><td>✓<small>*</small></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>✓</td></tr>
+    <tr><td><code>postgres</code></td>  <td>✓</td><td>✓</td>               <td>✓</td>              <td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>—</td></tr>
+    <tr><td><code>mssql</code></td>     <td>✓</td><td>✓</td>               <td>✓</td>              <td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>—</td></tr>
+    <tr><td><code>sqlite</code></td>    <td>✓</td><td>—</td>               <td>✓</td>              <td>✓</td><td>✓</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td><code>supabase</code></td>  <td colspan="9">＝ postgres（同表格）</td></tr>
+  </table>
+  <p><small>*<code>mysql</code> 的 FK / index 已包含在 <code>SHOW CREATE TABLE</code> 內，無獨立段落。Procedures / functions / triggers / events 用 <code>-- ROUTINE_BEGIN</code> / <code>-- ROUTINE_END</code> 標記包覆，restore 整段送 driver；MSSQL 用 <code>GO</code> batch 分隔，PG 用 <code>$$</code> + marker 雙重保險。</small></p>
+</div>
+
+<div class="card">
+  <h2>DB Migrator — Services / Lib</h2>
+  <table>
+    <tr><th>用途</th><th>Node 檔案</th><th>.NET 檔案</th></tr>
+    <tr><td>Job 管理（in-memory）</td><td><code>lib/jobs.js</code></td><td><code>Services/JobService.cs</code></td></tr>
+    <tr><td>License 模式切換</td><td><code>lib/license.js</code></td><td><code>Services/LicenseService.cs</code></td></tr>
+    <tr><td>License — offline 驗章</td><td><code>lib/license-offline.js</code></td><td>(整合在 LicenseService)</td></tr>
+    <tr><td>License — online heartbeat</td><td><code>lib/license-online.js</code></td><td><code>Services/LicenseOnlineService.cs</code></td></tr>
+    <tr><td>License — 遠端撤銷 cache (offline-mode kill switch)</td><td><code>lib/revocation.js</code></td><td><code>Services/RevocationService.cs</code></td></tr>
+    <tr><td>Plugin marketplace（fetch + verify + install）</td><td><code>lib/marketplace.js</code></td><td><code>Services/MarketplaceService.cs</code></td></tr>
+    <tr><td>Plugin host (hot reload)</td><td><code>lib/pluginHost.js</code></td><td>(.NET 用 DI auto-discover)</td></tr>
+    <tr><td>Git ops (clone / push)</td><td><code>lib/github.js</code></td><td><code>Services/GitHubService.cs</code></td></tr>
+    <tr><td>Supabase Storage</td><td><code>lib/supabaseStorage.js</code></td><td><code>Services/SupabaseStorageService.cs</code></td></tr>
+    <tr><td>Adapter shared helpers</td><td><code>adapters/_shared.js</code></td><td><code>Adapters/SqlHelpers.cs</code></td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>License Server — 區塊</h2>
+  <table>
+    <tr><th>區塊</th><th>檔案</th><th>用途</th></tr>
+    <tr><td><b>main entry</b></td><td><code>server.js</code></td><td>express setup、auth endpoints (含 2FA 偵測)、middleware</td></tr>
+    <tr><td><b>schema</b></td><td><code>db.js</code></td><td>SQLite + 自動 migration（addColumnIfMissing）+ bootstrap admin from env</td></tr>
+    <tr><td><b>plans</b></td><td><code>plans.js</code></td><td>plan 定義 (trial / basic / team / enterprise) + features + Stripe price + ECPay amount</td></tr>
+    <tr><td><b>email</b></td><td><code>lib/email.js</code></td><td>nodemailer SMTP；無設定時 dev mode 印 console</td></tr>
+    <tr><td><b>IP 白名單</b></td><td><code>lib/ip.js</code></td><td>plain IP / CIDR / wildcard（`192.168.*` matches multi-segment）</td></tr>
+    <tr><td><b>加密</b></td><td><code>(lib/encrypt.js 同 node-express)</code></td><td>AES-256-GCM；TOTP secret + 排程備份 DB 密碼用</td></tr>
+    <tr><td><b>TOTP</b></td><td><code>lib/totp.js</code></td><td>otplib + qrcode；setup / verify / 加密 secret</td></tr>
+    <tr><td><b>ECPay</b></td><td><code>lib/ecpay.js</code></td><td>CheckMacValue (SHA256) + 表單 payload + return 驗章</td></tr>
+    <tr><td><b>auth (built-in)</b></td><td><code>server.js</code> 內 /api/auth/*</td><td>register / login / heartbeat / verify-email / logout</td></tr>
+    <tr><td><b>2FA routes</b></td><td><code>routes/twofa.js</code></td><td>setup / enable / disable / verify-login（含 challenge store）</td></tr>
+    <tr><td><b>admin routes</b></td><td><code>routes/admin.js</code></td><td>cookie-auth；users CRUD / sessions / events / set-free</td></tr>
+    <tr><td><b>user portal routes</b></td><td><code>routes/user.js</code></td><td>Bearer-auth；自己的 plan / sessions / kick / change-pw / upgrade</td></tr>
+    <tr><td><b>Stripe routes</b></td><td><code>routes/stripe.js</code></td><td>checkout + webhook（checkout.session.completed / invoice.paid / sub.deleted）</td></tr>
+    <tr><td><b>ECPay routes</b></td><td><code>routes/billing-ecpay.js</code></td><td>checkout（回 form）+ async return（驗章 + 升級 plan）</td></tr>
+    <tr><td><b>revocation routes</b></td><td><code>routes/revocation.js</code></td><td>公開無 auth；offline-mode client phone home 用：<code>GET /list</code>、<code>GET /check?id=</code></td></tr>
+    <tr><td><b>admin web UI</b></td><td><code>public/admin.html</code> + <code>admin.js</code> + <code>admin.css</code></td><td>登入、看 user、改 plan、查 IP 紀錄、Stripe 狀態、🔑 Licenses 撤銷面板</td></tr>
+    <tr><td><b>客戶 portal</b></td><td><code>public/portal.html</code> + <code>portal.js</code> + <code>portal.css</code></td><td>自助看 plan / 在線裝置 / 改密碼 / 升級 / 2FA</td></tr>
+    <tr><td><b>CLI 管理</b></td><td><code>admin-cli.js</code></td><td>create-user / list / revoke / kick-all / set-plan / set-free / make-admin / reset-trial / delete-user / plans / <b>list-licenses</b> / <b>add-license</b> / <b>import-licenses</b> / <b>revoke-license</b> / <b>unrevoke-license</b></td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>License Server — 資料表</h2>
+  <table>
+    <tr><th>Table</th><th>用途</th><th>關鍵欄位</th></tr>
+    <tr>
+      <td><code>users</code></td>
+      <td>所有客戶帳號</td>
+      <td>email、password_hash、plan、max_devices、trial_started_at、expires_at、email_verified、ip_whitelist (JSON)、free_until、stripe_customer_id、<b>totp_secret_enc</b>、<b>totp_enabled</b>、notes</td>
+    </tr>
+    <tr>
+      <td><code>sessions</code></td>
+      <td>目前在線的 client app session</td>
+      <td>id (token)、user_id、ip、user_agent、last_seen</td>
+    </tr>
+    <tr>
+      <td><code>event_log</code></td>
+      <td>所有重要事件 audit</td>
+      <td>user_id、ip、event (login/kicked/email_verified/...)、details JSON、at</td>
+    </tr>
+    <tr>
+      <td><code>issued_licenses</code></td>
+      <td>已發行的 offline-mode license 紀錄（remote kill switch）</td>
+      <td>id（UUID = .key 內的 lid）、customer、plan、issued_at、expires_at、<b>revoked_at</b>、<b>revoke_reason</b>、source、notes</td>
+    </tr>
+    <tr>
+      <td><code>admin_sessions</code></td>
+      <td>Admin web UI 登入用 cookie session</td>
+      <td>id、user_id、ip、last_seen</td>
+    </tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Plan 矩陣</h2>
+  <table>
+    <tr><th>Plan</th><th>max_devices</th><th>多 DB 一次匯</th><th>專案備份</th><th>匯出檔大小</th><th>有效期</th></tr>
+    <tr><td><b>trial</b></td><td>1</td><td>❌ (max 1)</td><td>❌</td><td>50 MB</td><td>7 天</td></tr>
+    <tr><td><b>basic</b></td><td>1</td><td>✅ (max 5)</td><td>✅</td><td>—</td><td>付費期間</td></tr>
+    <tr><td><b>team</b></td><td>5</td><td>✅</td><td>✅</td><td>—</td><td>付費期間</td></tr>
+    <tr><td><b>enterprise</b></td><td>999</td><td>✅</td><td>✅</td><td>—</td><td>付費期間</td></tr>
+  </table>
+  <div class="note">改 plan 限制：編輯 <code>license-server/plans.js</code>，重啟 license server 即可。</div>
+</div>
+
+<div class="card">
+  <h2>Plugin 區塊（範例）</h2>
+  <table>
+    <tr><th>Plugin</th><th>位置</th><th>貢獻</th></tr>
+    <tr>
+      <td><code>hello</code> (Node)</td>
+      <td><code>node-express/plugins/hello/</code></td>
+      <td>route + 假 adapter + UI tab + static script — 4 種能力示範</td>
+    </tr>
+    <tr>
+      <td><code>HelloController</code> (.NET)</td>
+      <td><code>dotnet8/Plugins/</code></td>
+      <td>route + UI tab via <code>IPluginUiContributor</code></td>
+    </tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>環境變數對照</h2>
+  <table>
+    <tr><th>變數</th><th>哪個元件</th><th>用途</th></tr>
+    <tr><td><code>PORT</code></td><td>三個都有</td><td>監聽 port（預設：3000 / 3001 / 4000）</td></tr>
+    <tr><td><code>LICENSE_MODE</code></td><td>DB Migrator</td><td><code>offline</code> / <code>online</code> / <code>disabled</code></td></tr>
+    <tr><td><code>LICENSE_SERVER_URL</code></td><td>DB Migrator</td><td>online mode 才用，例：<code>http://localhost:4000</code></td></tr>
+    <tr><td><code>PLUGIN_WATCH</code></td><td>DB Migrator (Node)</td><td><code>off</code> 關掉 hot reload</td></tr>
+    <tr><td><code>LICENSE_DB</code></td><td>License Server</td><td>SQLite 檔位置（預設 <code>./license.db</code>）</td></tr>
+    <tr><td><code>SMTP_HOST</code> / <code>SMTP_PORT</code> / <code>SMTP_USER</code> / <code>SMTP_PASS</code> / <code>SMTP_FROM</code></td><td>License Server</td><td>email 驗證寄信用；都沒設 → dev mode 印 console</td></tr>
+    <tr><td><code>PUBLIC_BASE_URL</code></td><td>License Server</td><td>email 驗證連結用，例：<code>https://license.example.com</code></td></tr>
+    <tr><td><code>STRIPE_SECRET_KEY</code> / <code>STRIPE_WEBHOOK_SECRET</code></td><td>License Server</td><td>Stripe 整合</td></tr>
+    <tr><td><code>STRIPE_PRICE_BASIC</code> / <code>_TEAM</code> / <code>_ENTERPRISE</code></td><td>License Server</td><td>各 plan 對應的 Stripe price ID</td></tr>
+    <tr><td><code>ADMIN_EMAIL</code> / <code>ADMIN_PASSWORD</code></td><td>License Server</td><td>初始化時建立的 admin 帳號（首次啟動）</td></tr>
+  </table>
+</div>
+
+</main>
+</body>
+</html>

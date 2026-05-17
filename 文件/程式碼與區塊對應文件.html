@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>程式碼與區塊對應文件 — DB Migrator</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<script src="docs-nav.js"></script>
+<div class="hero">
+  <h1>🗺️ 程式碼與區塊對應文件</h1>
+  <p>「我想做 X，要改哪個檔？」型導覽。每個常見任務直接給檔案位置 + 大概要動的範圍。</p>
+  <a class="back" href="index.html">← 文件首頁</a>
+</div>
+<main>
+
+<div class="card">
+  <h2>📚 目錄</h2>
+  <div class="toc">
+    <ul>
+      <li><a href="#new-db">加新 DB 類型</a></li>
+      <li><a href="#new-card">加新 DB 卡片</a></li>
+      <li><a href="#new-route">加新 API route</a></li>
+      <li><a href="#new-plugin">寫一個 plugin</a></li>
+      <li><a href="#new-tab">加新前端 tab</a></li>
+      <li><a href="#change-plan">改 plan 限制</a></li>
+      <li><a href="#change-trial">改試用天數</a></li>
+      <li><a href="#change-features">加新 feature flag</a></li>
+      <li><a href="#dump-format">改 dump 格式</a></li>
+      <li><a href="#change-port">改預設 port</a></li>
+      <li><a href="#change-banner">改 license banner 文字</a></li>
+      <li><a href="#change-tour">改新手指引步驟</a></li>
+      <li><a href="#change-style">改 UI 顏色 / 樣式</a></li>
+      <li><a href="#switch-mode">切換 license mode</a></li>
+      <li><a href="#whitelist-ip">設定 IP 白名單</a></li>
+      <li><a href="#free-month">給某使用者免費月</a></li>
+      <li><a href="#stripe">接 Stripe 付款</a></li>
+      <li><a href="#email-smtp">換 email 服務商</a></li>
+      <li><a href="#error-msg">改錯誤訊息</a></li>
+      <li><a href="#docs-update">更新本文件</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="card">
+  <h2 id="new-db">加新 DB 類型（例如 Oracle、MongoDB）</h2>
+  <h3>Node 端</h3>
+  <ol>
+    <li><code>node-express/adapters/oracle.js</code> — 實作 5 個方法（<code>testConnection / listTables / dump / restore / parseTableNamesFromDump</code>），可以參考 <code>mysql.js</code></li>
+    <li><code>node-express/adapters/index.js</code> 加 <code>oracle: () => require('./oracle')</code></li>
+    <li><code>node-express/package.json</code> 加 driver 依賴（例：<code>"oracledb": "^6.x"</code>）</li>
+  </ol>
+  <h3>.NET 端</h3>
+  <ol>
+    <li><code>dotnet8/Adapters/OracleAdapter.cs</code> 實作 <code>IDatabaseAdapter</code></li>
+    <li><code>dotnet8/Adapters/IDatabaseAdapter.cs</code> 的 <code>AdapterRegistry</code> 建構式加 <code>["oracle"] = () => new OracleAdapter()</code></li>
+    <li><code>dotnet8/DbMigrator.Web.csproj</code> 加 NuGet PackageReference</li>
+  </ol>
+  <h3>前端</h3>
+  <ol>
+    <li>編輯 <code>node-express/public/app.js</code>：<code>HOST_HINTS.oracle</code> + <code>TYPE_DEFAULTS.oracle</code></li>
+    <li>編輯 <code>node-express/public/index.html</code> 加卡片：<code>&lt;button class="card" data-type="oracle"&gt;...&lt;/button&gt;</code></li>
+    <li>同步到 <code>dotnet8/wwwroot/</code></li>
+  </ol>
+  <div class="note">完全不必動現有 4 種 adapter，是「拼圖式」加法。</div>
+</div>
+
+<div class="card">
+  <h2 id="new-card">加新 DB 卡片（不寫 adapter，靠 plugin）</h2>
+  <p>不想改主程式：寫 plugin 即可。範例：<code>node-express/plugins/oracle-plugin/index.js</code></p>
+  <pre><code>module.exports = {
+  adapter: { type: 'oracle', handler: { testConnection, ... } },
+  ui: {
+    cards: [{ type: 'oracle', title: 'Oracle', sub: 'Plugin DB', port: '1521' }],
+  },
+};</code></pre>
+  <p>存檔 → 自動 hot reload → 卡片立刻出現在 UI。</p>
+</div>
+
+<div class="card">
+  <h2 id="new-route">加新 API route（內建）</h2>
+  <ol>
+    <li><b>Node</b>：<code>node-express/routes/yourroute.js</code> export 一個 Express Router</li>
+    <li><b>Node</b>：<code>node-express/server.js</code> 加 <code>safeMount('/api/yourroute', './routes/yourroute', 'yourroute');</code></li>
+    <li><b>.NET</b>：<code>dotnet8/Controllers/YourController.cs</code> 加一個 <code>[ApiController][Route("api/yourroute")]</code> class — 自動 discover</li>
+  </ol>
+</div>
+
+<div class="card">
+  <h2 id="new-plugin">寫一個 plugin（推薦取代「改主程式」）</h2>
+  <h3>Node — 三步</h3>
+  <ol>
+    <li>建 <code>node-express/plugins/yourname/index.js</code></li>
+    <li>export <code>{ mount, router, adapter?, ui?, static? }</code> 任意組合</li>
+    <li>存檔 — hot reload 自動載入</li>
+  </ol>
+  <h3>.NET — 兩步</h3>
+  <ol>
+    <li>建 <code>dotnet8/Plugins/YourController.cs</code> 寫一個 controller</li>
+    <li>選用：<code>dotnet8/Plugins/YourUiContributor.cs</code> 實作 <code>IPluginUiContributor</code> 加 cards/tabs</li>
+  </ol>
+  <p>詳見 <code>plugins/README.md</code>（兩個版本各一份）</p>
+</div>
+
+<div class="card">
+  <h2 id="new-tab">加新前端 tab（不寫 plugin）</h2>
+  <ol>
+    <li><code>node-express/public/index.html</code> 在 <code>.mode-switch</code> 內加一顆 <code>&lt;button data-mode="yyy"&gt;...&lt;/button&gt;</code></li>
+    <li>底下加一個 <code>&lt;section id="step-yyy" class="step mode-panel" hidden&gt;...&lt;/section&gt;</code></li>
+    <li><code>node-express/public/app.js</code> 在 <code>.mode-switch button</code> click handler 加對應的 <code>$('#step-yyy').hidden = mode !== 'yyy';</code></li>
+    <li>同步到 <code>dotnet8/wwwroot/</code></li>
+  </ol>
+</div>
+
+<div class="card">
+  <h2 id="change-plan">改 plan 限制（max_devices、features）</h2>
+  <p>編輯 <code>license-server/plans.js</code>，重啟 license server 即可。例：</p>
+  <pre><code>team: {
+  max_devices: 10,           // 改成 10 台
+  features: {
+    bulk_export: true,
+    multi_db_count_max: 20,  // 加大上限
+    project_backup: true,
+    max_export_mb: null,
+  },
+},</code></pre>
+  <div class="warn">已存在的使用者要等下次 heartbeat 才會看到新限制（30 秒內）。</div>
+</div>
+
+<div class="card">
+  <h2 id="change-trial">改試用天數</h2>
+  <p><code>license-server/plans.js</code> 的 <code>trial.duration_days</code></p>
+  <pre><code>trial: { ..., duration_days: 14 },   // 改成 14 天</code></pre>
+  <p>已註冊的試用使用者：以「他的 trial_started_at + 新天數」計算，自動延長。</p>
+</div>
+
+<div class="card">
+  <h2 id="change-features">加新 feature flag（例如 max_table_count）</h2>
+  <ol>
+    <li><code>license-server/plans.js</code>：在每個 plan 的 <code>features</code> 加新欄位</li>
+    <li><code>node-express/lib/license.js</code> 的 <code>gate()</code> middleware：判斷 feature 後 403</li>
+    <li>前端 <code>app.js</code> 的 <code>applyFeatureGates()</code>：根據 feature 隱藏 / disable UI</li>
+    <li>.NET 同上對應到 <code>LicenseService</code> + middleware</li>
+  </ol>
+</div>
+
+<div class="card">
+  <h2 id="dump-format">改 dump 格式（例如加 schema 清空指令）</h2>
+  <p>每個 adapter 的 <code>dump()</code> 函式都自己負責 SQL 輸出。</p>
+  <table>
+    <tr><td>MySQL</td><td><code>node-express/adapters/mysql.js</code> / <code>dotnet8/Adapters/MySqlAdapter.cs</code> 的 <code>dump</code></td></tr>
+    <tr><td>PostgreSQL</td><td><code>postgres.js</code> / <code>PostgresAdapter.cs</code></td></tr>
+    <tr><td>SQL Server</td><td><code>mssql.js</code> / <code>MsSqlAdapter.cs</code></td></tr>
+    <tr><td>SQLite</td><td><code>sqlite.js</code> / <code>SqliteAdapter.cs</code></td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2 id="change-port">改預設 port</h2>
+  <table>
+    <tr><th>哪個</th><th>怎麼改</th></tr>
+    <tr><td>Node DB Migrator</td><td><code>node-express/server.js</code> 的 <code>const PORT = process.env.PORT || 3000;</code> 或 <code>$env:PORT=8080; npm start</code></td></tr>
+    <tr><td>.NET DB Migrator</td><td><code>dotnet8/appsettings.json</code> 的 Kestrel.Endpoints.Http.Url</td></tr>
+    <tr><td>License Server</td><td><code>license-server/server.js</code> 的 PORT 或 <code>$env:PORT=4000</code></td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2 id="change-banner">改 license banner 文字 / 樣式</h2>
+  <ol>
+    <li>文字：<code>node-express/public/app.js</code> 的 <code>refreshLicenseBanner()</code></li>
+    <li>顏色 / 樣式：<code>node-express/public/style.css</code> 的 <code>#license-banner</code> 區塊</li>
+    <li>同步到 <code>dotnet8/wwwroot/</code></li>
+  </ol>
+</div>
+
+<div class="card">
+  <h2 id="change-tour">改新手指引步驟</h2>
+  <p><code>node-express/public/tour.js</code> 頂部的 <code>STEPS</code> 陣列。每個 step：</p>
+  <pre><code>{ title: '...', body: '...HTML...', target: '#selector', requireType?: true }</code></pre>
+  <p>同步到 <code>dotnet8/wwwroot/</code>。</p>
+</div>
+
+<div class="card">
+  <h2 id="change-style">改 UI 顏色 / 主題</h2>
+  <p>主要在 <code>node-express/public/style.css</code>。常用變數：</p>
+  <table>
+    <tr><th>顏色</th><th>用途</th></tr>
+    <tr><td><code>#3b82f6</code></td><td>主色（按鈕、卡片 hover、tour 高亮）</td></tr>
+    <tr><td><code>#1f2937</code></td><td>header 背景、log 區深色背景</td></tr>
+    <tr><td><code>#f5f6f8</code></td><td>頁面背景</td></tr>
+    <tr><td><code>#dc2626</code></td><td>錯誤紅</td></tr>
+    <tr><td><code>#059669</code></td><td>成功綠</td></tr>
+  </table>
+  <p>全域改顏色：搜尋並取代 <code>#3b82f6</code>。同步到 wwwroot。</p>
+</div>
+
+<div class="card">
+  <h2 id="switch-mode">切換 license mode</h2>
+  <pre><code># 切到 online
+$env:LICENSE_MODE = "online"
+$env:LICENSE_SERVER_URL = "http://localhost:4000"
+npm start
+
+# 切回 offline
+Remove-Item Env:LICENSE_MODE
+npm start
+
+# 完全停用（只供開發）
+$env:LICENSE_MODE = "disabled"
+npm start</code></pre>
+  <p>負責切換的程式：<code>node-express/lib/license.js</code></p>
+</div>
+
+<div class="card">
+  <h2 id="whitelist-ip">設定使用者 IP 白名單</h2>
+  <h3>用 admin CLI：</h3>
+  <pre><code># （目前 CLI 沒這指令；改用直接呼叫 admin API）
+curl -X PATCH http://localhost:4000/api/admin/users/&lt;userId&gt; \
+  -H "Content-Type: application/json" \
+  --cookie admin_session=... \
+  -d '{"ip_whitelist": ["1.2.3.4", "10.0.0.0/8", "192.168.*"]}'</code></pre>
+  <h3>或用 Admin Web UI</h3>
+  <p>在使用者編輯頁有 IP whitelist 欄位（逗號分隔）。</p>
+  <h3>底層程式</h3>
+  <p><code>license-server/lib/ip.js</code> — 支援 plain IP、CIDR (<code>10.0.0.0/8</code>)、wildcard (<code>192.168.*</code>)</p>
+</div>
+
+<div class="card">
+  <h2 id="free-month">給某使用者「這個月免費」</h2>
+  <h3>Admin CLI（待加）或 Web UI：</h3>
+  <pre><code># 設定 free_until 到月底
+node admin-cli.js set-free --email user@example.com --until 2026-12-31</code></pre>
+  <h3>程式碼</h3>
+  <p><code>license-server/server.js</code> 的 <code>checkUserStatus()</code> 函式優先檢查 <code>free_until</code>，若有效就用 <code>freeOverridePlan()</code> 的 features（預設 = team plan）。</p>
+</div>
+
+<div class="card">
+  <h2 id="stripe">接 Stripe 付款</h2>
+  <ol>
+    <li>到 Stripe Dashboard 建立 Products + Prices，記下 <code>price_xxx</code></li>
+    <li>License Server 環境變數：
+      <pre><code>STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_BASIC=price_xxx
+STRIPE_PRICE_TEAM=price_yyy
+STRIPE_PRICE_ENTERPRISE=price_zzz</code></pre>
+    </li>
+    <li>Stripe Dashboard 設 webhook → <code>https://license.example.com/api/billing/webhook</code></li>
+    <li>程式碼：<code>license-server/routes/stripe.js</code></li>
+  </ol>
+</div>
+
+<div class="card">
+  <h2 id="email-smtp">換 email 服務商（SendGrid / Mailgun / Resend）</h2>
+  <p>都支援 SMTP，只要改環境變數。例 SendGrid：</p>
+  <pre><code>SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=587
+SMTP_USER=apikey
+SMTP_PASS=&lt;your sendgrid api key&gt;
+SMTP_FROM=no-reply@example.com</code></pre>
+  <p>程式碼在 <code>license-server/lib/email.js</code> — 用 nodemailer，協定是標準 SMTP。</p>
+</div>
+
+<div class="card">
+  <h2 id="error-msg">改 server 端錯誤訊息文字</h2>
+  <ul>
+    <li>License gate 訊息（試用版被擋）：<code>node-express/lib/license.js</code> 的 <code>gate()</code></li>
+    <li>連線錯誤：各 adapter 的 <code>testConnection</code> 內 catch</li>
+    <li>License server 訊息：<code>license-server/server.js</code> 的各 endpoint return 的 error string</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="docs-update">更新本資料夾的文件</h2>
+  <p>所有頂層中文文件在 <code>F:\匯出資料庫的bat\文件\</code>：</p>
+  <ul>
+    <li><code>index.html</code> — 主入口（含子資料夾連結）</li>
+    <li><code>架構展示.html</code></li>
+    <li><code>區塊參考.html</code></li>
+    <li><code>技術文件.html</code></li>
+    <li><code>程式碼與區塊對應文件.html</code>（本檔）</li>
+    <li><code>操作文件.html</code></li>
+    <li><code>重構計畫.html</code></li>
+    <li><code>優化擴充建議的計畫.html</code></li>
+    <li><code>style.css</code> — 7 個檔共用樣式</li>
+  </ul>
+  <p>子資料夾 <code>node-express/</code> 跟 <code>dotnet8/</code> 內的文件是各版專屬。</p>
+</div>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,80 @@
+# Node
+node_modules/
+*.log
+npm-debug.log*
+package-lock.json.bak
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+*.pdb
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Secrets — never commit
+.env
+.env.local
+*.pem
+*.key
+secrets/
+
+# License-tools (private)
+license-tools/private-key.pem
+license-tools/public-key.pem
+license-tools/issued-licenses.jsonl
+
+# License server runtime state
+license-server/license.db
+license-server/license.db-wal
+license-server/license.db-shm
+license-server/*.db
+license-server/*.db-wal
+license-server/*.db-shm
+
+# DB Migrator client runtime state
+node-express/.trial
+node-express/.schedule-key
+node-express/.revocation-cache.json
+node-express/trusted-publishers.json
+node-express/jobs.db
+node-express/jobs.db-wal
+node-express/jobs.db-shm
+node-express/schedules.db
+node-express/schedules.db-wal
+node-express/schedules.db-shm
+node-express/scheduled-backups/
+node-express/tmp/
+node-express/license.key
+
+dotnet8/.trial
+dotnet8/.schedule-key
+dotnet8/.revocation-cache.json
+dotnet8/trusted-publishers.json
+dotnet8/jobs.db
+dotnet8/jobs.db-wal
+dotnet8/jobs.db-shm
+dotnet8/schedules.db
+dotnet8/schedules.db-wal
+dotnet8/schedules.db-shm
+dotnet8/scheduled-backups/
+dotnet8/tmp/
+dotnet8/license.key
+
+# Marketplace-installed plugins (always re-fetchable from GitHub)
+node-express/plugins/*/
+!node-express/plugins/hello/
+dotnet8/Plugins/marketplace/
+
+# Integration runtime
+integration/sqlite-test.db
+integration/dumps/
+integration/node_modules/

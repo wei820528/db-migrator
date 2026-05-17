@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>UI 解析 - DB Migrator (.NET 8 版)</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; margin: 0; background: #f5f6f8; color: #1f2937; line-height: 1.7; }
+  header { background: linear-gradient(135deg, #1e40af, #1e3a8a); color: #fff; padding: 24px 32px; }
+  header h1 { margin: 0; font-size: 22px; }
+  nav.topnav { background: #1e3a8a; padding: 10px 32px; }
+  nav.topnav a { color: #bfdbfe; text-decoration: none; margin-right: 18px; font-size: 14px; font-weight: 500; }
+  nav.topnav a:hover { color: #fff; text-decoration: underline; }
+  nav.topnav a.active { color: #fff; border-bottom: 2px solid #60a5fa; padding-bottom: 4px; }
+  main { max-width: 1100px; margin: 28px auto; padding: 0 24px 60px; }
+  h2 { color: #1e40af; border-bottom: 2px solid #dbeafe; padding-bottom: 6px; margin-top: 36px; }
+  h3 { color: #1e3a8a; margin-top: 24px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; background: #fff; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  th { background: #dbeafe; color: #1e3a8a; font-weight: 600; }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-family: Consolas, monospace; font-size: 12px; color: #be123c; }
+  pre { background: #1f2937; color: #e5e7eb; padding: 12px 16px; border-radius: 6px; overflow-x: auto; font-size: 12px; line-height: 1.5; }
+  pre .kw { color: #c4b5fd; }
+  pre .str { color: #86efac; }
+  pre .cm { color: #9ca3af; font-style: italic; }
+  pre .tag { color: #fbbf24; }
+  pre .attr { color: #f87171; }
+  .info-box { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 12px 16px; margin: 12px 0; border-radius: 4px; font-size: 14px; }
+  .annotation { background: #fff; padding: 12px 16px; border-left: 3px solid #3b82f6; margin: 8px 0; font-size: 13px; }
+  .annotation strong { color: #1d4ed8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎨 UI 解析 - DB Migrator (.NET 8 版)</h1>
+</header>
+<nav class="topnav">
+  <a href="../index.html">總覽</a>
+  <a href="index.html">本版首頁</a>
+  <a href="操作手冊.html">操作手冊</a>
+  <a href="function對照.html">Function 對照</a>
+  <a href="UI說明.html" class="active">UI 解析</a>
+  <a href="修改指南.html">修改指南</a>
+</nav>
+<main>
+
+<div class="info-box">
+  ⚠️ <strong>注意：</strong>本版的前端檔案放在 <code>dotnet8/wwwroot/</code>，與 node-express 版的 <code>public/</code> 內容<strong>結構相同但獨立</strong>（依您的要求不共用）。修改前端時請編輯 wwwroot 目錄下的對應檔案。
+</div>
+
+<h2>三個檔案的分工</h2>
+<table>
+  <tr><th>檔案</th><th>負責什麼</th></tr>
+  <tr><td><code>wwwroot/index.html</code></td><td>結構：把畫面切成 4 個 <code>&lt;section class="step"&gt;</code></td></tr>
+  <tr><td><code>wwwroot/style.css</code></td><td>樣式：深灰 header、白色卡片、藍色按鈕、黑底 log</td></tr>
+  <tr><td><code>wwwroot/app.js</code></td><td>互動：事件監聽、fetch API、輪詢 job 狀態</td></tr>
+</table>
+
+<h2>ASP.NET Core 如何 serve 這些檔案</h2>
+<pre><span class="cm">// Program.cs 內：</span>
+app.<span class="kw">UseDefaultFiles</span>();    <span class="cm">// 找到 wwwroot/index.html 當預設首頁</span>
+app.<span class="kw">UseStaticFiles</span>();     <span class="cm">// 讓 wwwroot/ 下所有檔案可以被 HTTP 取用</span></pre>
+
+<p>因此瀏覽器存取：</p>
+<ul>
+  <li><code>http://localhost:3001/</code> → <code>wwwroot/index.html</code></li>
+  <li><code>http://localhost:3001/app.js</code> → <code>wwwroot/app.js</code></li>
+  <li><code>http://localhost:3001/style.css</code> → <code>wwwroot/style.css</code></li>
+</ul>
+
+<h2>HTML 結構（wwwroot/index.html）</h2>
+<pre>&lt;<span class="tag">header</span>&gt;
+  &lt;<span class="tag">h1</span>&gt;資料庫匯出 / 匯入&lt;/<span class="tag">h1</span>&gt;
+&lt;/<span class="tag">header</span>&gt;
+
+&lt;<span class="tag">main id</span>=<span class="str">"app"</span>&gt;
+  &lt;<span class="tag">section id</span>=<span class="str">"step-type"</span> <span class="attr">class</span>=<span class="str">"step active"</span>&gt;        <span class="cm">// 第 1 步：選 DB 類型</span>
+    &lt;<span class="tag">div class</span>=<span class="str">"cards"</span>&gt;
+      &lt;<span class="tag">button class</span>=<span class="str">"card"</span> <span class="attr">data-type</span>=<span class="str">"mysql"</span>&gt;...
+      &lt;<span class="tag">button class</span>=<span class="str">"card"</span> <span class="attr">data-type</span>=<span class="str">"postgres"</span>&gt;...
+      ...
+  &lt;/<span class="tag">section</span>&gt;
+
+  &lt;<span class="tag">section id</span>=<span class="str">"step-conn"</span> <span class="attr">class</span>=<span class="str">"step"</span>&gt;               <span class="cm">// 第 2 步：連線設定</span>
+    &lt;<span class="tag">form id</span>=<span class="str">"conn-form"</span>&gt;...
+    &lt;<span class="tag">form id</span>=<span class="str">"sqlite-form"</span> <span class="attr">hidden</span>&gt;...
+    &lt;<span class="tag">button id</span>=<span class="str">"btn-test"</span>&gt;連線測試&lt;/<span class="tag">button</span>&gt;
+    &lt;<span class="tag">div class</span>=<span class="str">"mode-switch"</span>&gt;...
+  &lt;/<span class="tag">section</span>&gt;
+
+  &lt;<span class="tag">section id</span>=<span class="str">"step-export"</span> <span class="attr">class</span>=<span class="str">"step mode-panel"</span>&gt;  <span class="cm">// 第 3a：匯出</span>
+  &lt;<span class="tag">section id</span>=<span class="str">"step-import"</span> <span class="attr">class</span>=<span class="str">"step mode-panel"</span> <span class="attr">hidden</span>&gt; <span class="cm">// 第 3b：匯入</span>
+&lt;/<span class="tag">main</span>&gt;</pre>
+
+<h2>CSS 重要 class（wwwroot/style.css）</h2>
+<table>
+  <tr><th>Class</th><th>套在哪</th><th>用途</th></tr>
+  <tr><td><code>.step</code></td><td>每個大區塊</td><td>白底圓角卡片，預設隱藏</td></tr>
+  <tr><td><code>.step.active</code></td><td>—</td><td>顯示該區塊</td></tr>
+  <tr><td><code>.cards</code></td><td>類型卡片容器</td><td>4 欄 grid 自動換行</td></tr>
+  <tr><td><code>.card</code> / <code>.card.selected</code></td><td>單一類型卡</td><td>白底邊框，選中變藍邊</td></tr>
+  <tr><td><code>.form-grid</code></td><td>連線表單</td><td>2 欄 grid</td></tr>
+  <tr><td><code>.mode-switch</code></td><td>匯出/匯入切換鈕</td><td>頂部分隔線 + 灰色按鈕</td></tr>
+  <tr><td><code>.log</code></td><td>進度顯示區</td><td>黑底等寬字 + 捲軸</td></tr>
+  <tr><td><code>.tables-list</code></td><td>勾選列表</td><td>最高 280px 含捲軸</td></tr>
+  <tr><td><code>.diff-table</code></td><td>匯入比對表</td><td>標準 HTML table</td></tr>
+  <tr><td><code>.exists-yes / .exists-no</code></td><td>狀態文字</td><td>橘字 / 綠字</td></tr>
+</table>
+
+<h2>JavaScript 主要事件（wwwroot/app.js）</h2>
+
+<h3>全域狀態物件</h3>
+<pre><span class="kw">const</span> state = {
+  type: null,        <span class="cm">// 'mysql' / 'postgres' / 'mssql' / 'sqlite'</span>
+  connection: null,
+  tables: [],
+  uploadId: null,
+};</pre>
+
+<h3>主要事件鏈</h3>
+<div class="annotation"><strong>卡片點擊：</strong>選 DB 類型 → 顯示連線/匯出表單 → 自動填預設 port</div>
+<div class="annotation"><strong>連線測試：</strong>POST <code>/api/connection/test</code> → 成功則自動 loadTables() → 失敗顯示錯誤</div>
+<div class="annotation"><strong>匯出/匯入切換：</strong>把對應 section 用 hidden 屬性互切</div>
+<div class="annotation"><strong>開始匯出：</strong>POST <code>/api/export</code> 拿 jobId → pollJob() 每 0.8 秒輪詢一次</div>
+<div class="annotation"><strong>匯入兩步：</strong>(1) 上傳 SQL 比對 → (2) 執行匯入</div>
+
+<h3>pollJob() 輪詢函式</h3>
+<pre><span class="kw">async function</span> <span class="kw">pollJob</span>(id, logSel, resultSel, onDone) {
+  <span class="kw">while</span> (<span class="kw">true</span>) {
+    <span class="kw">const</span> job = <span class="kw">await</span> fetch(<span class="str">`/api/jobs/${id}`</span>).then(x =&gt; x.json());
+    $(logSel).textContent = (job.progress || []).map(p =&gt; p.line).join(<span class="str">'\n'</span>);
+    <span class="kw">if</span> (job.status === <span class="str">'done'</span>)  { $(resultSel).innerHTML = onDone(job); <span class="kw">return</span>; }
+    <span class="kw">if</span> (job.status === <span class="str">'error'</span>) { ...錯誤訊息... <span class="kw">return</span>; }
+    <span class="kw">await</span> <span class="kw">new</span> Promise(r =&gt; setTimeout(r, <span class="str">800</span>));
+  }
+}</pre>
+
+<h2>三種狀態色碼</h2>
+<table>
+  <tr><th>狀態</th><th>色號</th><th>樣式來源</th></tr>
+  <tr><td>連線成功</td><td>綠 <code>#059669</code></td><td><code>#conn-status.ok</code></td></tr>
+  <tr><td>連線失敗</td><td>紅 <code>#dc2626</code></td><td><code>#conn-status.err</code></td></tr>
+  <tr><td>主按鈕</td><td>藍 <code>#3b82f6</code></td><td><code>button</code> 預設</td></tr>
+  <tr><td>已存在（將覆寫）</td><td>橘 <code>#b45309</code></td><td><code>.exists-yes</code></td></tr>
+  <tr><td>不存在（新建）</td><td>綠 <code>#059669</code></td><td><code>.exists-no</code></td></tr>
+  <tr><td>header 背景</td><td>深灰 <code>#1f2937</code></td><td><code>header</code></td></tr>
+</table>
+
+<h2>注意：JSON 欄位大小寫</h2>
+<div class="info-box">
+ASP.NET Core 預設 <strong>camelCase</strong> 序列化。<br>
+所以 .NET 端 C# property 寫 <code>Type</code>、<code>Connection</code>、<code>Options</code>，<br>
+JSON 傳輸時是 <code>type</code>、<code>connection</code>、<code>options</code>（與 node 版完全相同），前端不用改。
+</div>
+
+</main>
+</body>
+</html>

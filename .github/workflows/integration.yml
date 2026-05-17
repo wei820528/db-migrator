@@ -1,0 +1,73 @@
+name: Integration
+
+# Full adapter round-trips against real DB containers. Slow (~3 min) so we
+# gate this behind: pushes to main + PRs that actually touch adapter / fixture
+# code. Other PRs still get fast unit tests via the main CI workflow.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'node-express/adapters/**'
+      - 'node-express/lib/**'
+      - 'integration/**'
+      - '.github/workflows/integration.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'node-express/adapters/**'
+      - 'node-express/lib/**'
+      - 'integration/**'
+      - '.github/workflows/integration.yml'
+  workflow_dispatch:        # manual trigger from Actions tab
+
+jobs:
+  integration:
+    name: Adapter round-trip (docker-compose)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: node-express/package-lock.json
+
+      # better-sqlite3 + mongo native bits need Python on Linux
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.x' }
+
+      - name: Install node-express deps (includes optional mongo + ioredis)
+        working-directory: node-express
+        run: npm install --no-audit --no-fund
+
+      - name: Boot containers
+        working-directory: integration
+        run: docker compose up -d
+
+      - name: Wait for containers to settle
+        # docker-compose healthchecks bring services up gradually; run.js still
+        # has its own waitFor() per adapter so this is a courtesy pause.
+        run: sleep 20
+
+      - name: Run round-trips
+        working-directory: integration
+        run: node run.js
+
+      - name: Upload dumps on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-dumps
+          path: integration/dumps/*
+
+      - name: Container logs on failure
+        if: failure()
+        working-directory: integration
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        working-directory: integration
+        run: docker compose down -v

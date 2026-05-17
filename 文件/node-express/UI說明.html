@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>UI 解析 - DB Migrator (Node.js 版)</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; margin: 0; background: #f5f6f8; color: #1f2937; line-height: 1.7; }
+  header { background: linear-gradient(135deg, #047857, #065f46); color: #fff; padding: 24px 32px; }
+  header h1 { margin: 0; font-size: 22px; }
+  nav.topnav { background: #064e3b; padding: 10px 32px; }
+  nav.topnav a { color: #a7f3d0; text-decoration: none; margin-right: 18px; font-size: 14px; font-weight: 500; }
+  nav.topnav a:hover { color: #fff; text-decoration: underline; }
+  nav.topnav a.active { color: #fff; border-bottom: 2px solid #34d399; padding-bottom: 4px; }
+  main { max-width: 1100px; margin: 28px auto; padding: 0 24px 60px; }
+  h2 { color: #047857; border-bottom: 2px solid #d1fae5; padding-bottom: 6px; margin-top: 36px; }
+  h3 { color: #065f46; margin-top: 24px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; background: #fff; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  th { background: #ecfdf5; color: #065f46; font-weight: 600; }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-family: Consolas, monospace; font-size: 12px; color: #be123c; }
+  pre { background: #1f2937; color: #e5e7eb; padding: 12px 16px; border-radius: 6px; overflow-x: auto; font-size: 12px; line-height: 1.5; }
+  pre .kw { color: #c4b5fd; }
+  pre .str { color: #86efac; }
+  pre .cm { color: #9ca3af; font-style: italic; }
+  pre .tag { color: #fbbf24; }
+  pre .attr { color: #f87171; }
+  .info-box { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; margin: 12px 0; border-radius: 4px; font-size: 14px; }
+  .annotation { background: #fff; padding: 12px 16px; border-left: 3px solid #3b82f6; margin: 8px 0; font-size: 13px; }
+  .annotation strong { color: #1d4ed8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎨 UI 解析 - DB Migrator (Node.js 版)</h1>
+</header>
+<nav class="topnav">
+  <a href="../index.html">總覽</a>
+  <a href="index.html">本版首頁</a>
+  <a href="操作手冊.html">操作手冊</a>
+  <a href="function對照.html">Function 對照</a>
+  <a href="UI說明.html" class="active">UI 解析</a>
+  <a href="修改指南.html">修改指南</a>
+</nav>
+<main>
+
+<h2>三個檔案的分工</h2>
+<table>
+  <tr><th>檔案</th><th>負責什麼</th></tr>
+  <tr><td><code>public/index.html</code></td><td>結構：把畫面切成 4 個 <code>&lt;section class="step"&gt;</code></td></tr>
+  <tr><td><code>public/style.css</code></td><td>樣式：藍底 header、白色卡片、藍色按鈕、黑底 log</td></tr>
+  <tr><td><code>public/app.js</code></td><td>互動：事件監聽、AJAX 呼叫、輪詢 job 狀態</td></tr>
+</table>
+
+<h2>HTML 結構（index.html）</h2>
+<pre>&lt;<span class="tag">header</span>&gt;
+  &lt;<span class="tag">h1</span>&gt;資料庫匯出 / 匯入&lt;/<span class="tag">h1</span>&gt;
+&lt;/<span class="tag">header</span>&gt;
+
+&lt;<span class="tag">main id</span>=<span class="str">"app"</span>&gt;
+  &lt;<span class="tag">section id</span>=<span class="str">"step-type"</span> <span class="attr">class</span>=<span class="str">"step active"</span>&gt;       <span class="cm">// 第 1 步：選 DB 類型</span>
+    &lt;<span class="tag">div class</span>=<span class="str">"cards"</span>&gt;
+      &lt;<span class="tag">button class</span>=<span class="str">"card"</span> <span class="attr">data-type</span>=<span class="str">"mysql"</span>&gt;...
+      &lt;<span class="tag">button class</span>=<span class="str">"card"</span> <span class="attr">data-type</span>=<span class="str">"postgres"</span>&gt;...
+      ...
+  &lt;/<span class="tag">section</span>&gt;
+
+  &lt;<span class="tag">section id</span>=<span class="str">"step-conn"</span> <span class="attr">class</span>=<span class="str">"step"</span>&gt;              <span class="cm">// 第 2 步：連線設定</span>
+    &lt;<span class="tag">form id</span>=<span class="str">"conn-form"</span>&gt;...                          <span class="cm">// 一般 DB 用</span>
+    &lt;<span class="tag">form id</span>=<span class="str">"sqlite-form"</span> <span class="attr">hidden</span>&gt;...                  <span class="cm">// SQLite 用</span>
+    &lt;<span class="tag">button id</span>=<span class="str">"btn-test"</span>&gt;連線測試&lt;/<span class="tag">button</span>&gt;
+    &lt;<span class="tag">div class</span>=<span class="str">"mode-switch"</span>&gt;...                       <span class="cm">// 匯出/匯入切換</span>
+  &lt;/<span class="tag">section</span>&gt;
+
+  &lt;<span class="tag">section id</span>=<span class="str">"step-export"</span> <span class="attr">class</span>=<span class="str">"step mode-panel"</span>&gt;  <span class="cm">// 第 3a：匯出表單</span>
+  &lt;<span class="tag">section id</span>=<span class="str">"step-import"</span> <span class="attr">class</span>=<span class="str">"step mode-panel"</span> <span class="attr">hidden</span>&gt;  <span class="cm">// 第 3b：匯入</span>
+&lt;/<span class="tag">main</span>&gt;</pre>
+
+<div class="info-box">
+  <strong>核心機制：</strong>用 CSS class <code>.step</code> + <code>.step.active</code> 控制顯示。每個 section 預設 <code>display: none</code>，加上 <code>.active</code> 才會出現。
+  選了 DB 後 JS 會自動把後面兩個 section 加上 <code>.active</code>。
+</div>
+
+<h2>CSS 重要 class（style.css）</h2>
+<table>
+  <tr><th>Class</th><th>套在哪</th><th>用途</th></tr>
+  <tr><td><code>.step</code></td><td>每個大區塊</td><td>白底圓角卡片，預設隱藏</td></tr>
+  <tr><td><code>.step.active</code></td><td>—</td><td>顯示該區塊</td></tr>
+  <tr><td><code>.cards</code></td><td>類型卡片的容器</td><td>4 欄 grid，可自動換行</td></tr>
+  <tr><td><code>.card</code></td><td>單一類型卡</td><td>白底邊框，hover 變藍邊</td></tr>
+  <tr><td><code>.card.selected</code></td><td>—</td><td>被選中：藍邊 + 淺藍底</td></tr>
+  <tr><td><code>.form-grid</code></td><td>連線表單</td><td>2 欄 grid，欄位上下排</td></tr>
+  <tr><td><code>.mode-switch</code></td><td>匯出/匯入切換鈕容器</td><td>頂部分隔線 + 灰色按鈕</td></tr>
+  <tr><td><code>.mode-switch .active</code></td><td>被選中的切換鈕</td><td>變成藍底白字</td></tr>
+  <tr><td><code>.log</code></td><td>進度顯示區</td><td>黑底淺灰字、等寬字體、含捲軸</td></tr>
+  <tr><td><code>.tables-list</code></td><td>資料表勾選列表</td><td>最高 280px，超過捲軸</td></tr>
+  <tr><td><code>.diff-table</code></td><td>匯入對照表</td><td>標準 HTML table，含底線</td></tr>
+  <tr><td><code>.exists-yes / .exists-no</code></td><td>對照表的狀態文字</td><td>已存在=橘字、不存在=綠字</td></tr>
+</table>
+
+<h2>JavaScript 主要事件（app.js）</h2>
+
+<h3>1. 全域狀態物件</h3>
+<pre><span class="kw">const</span> state = {
+  type: null,        <span class="cm">// 'mysql' / 'postgres' / 'mssql' / 'sqlite'</span>
+  connection: null,  <span class="cm">// 連線資訊（host/port/user/...）</span>
+  tables: [],        <span class="cm">// 從 DB 拉回來的 table 清單</span>
+  uploadId: null,    <span class="cm">// 匯入時記住已上傳檔的 ID</span>
+};</pre>
+
+<h3>2. 卡片點擊事件</h3>
+<div class="annotation">
+  <strong>觸發：</strong>點任何一張 <code>.card</code><br>
+  <strong>動作：</strong>清除其他卡的 selected → 設目前 type → 顯示 step-conn 與 step-export → 切換 SQLite/一般表單 → 自動填預設 port
+</div>
+
+<h3>3. 連線測試按鈕</h3>
+<div class="annotation">
+  <strong>觸發：</strong>點 <code>#btn-test</code><br>
+  <strong>動作：</strong>fetch POST <code>/api/connection/test</code> → 成功則 <code>loadTables()</code> 抓資料表清單 → 失敗顯示紅色錯誤訊息
+</div>
+
+<h3>4. 匯出/匯入切換</h3>
+<div class="annotation">
+  <strong>觸發：</strong>點 <code>.mode-switch button</code><br>
+  <strong>動作：</strong>把 <code>#step-export</code> 與 <code>#step-import</code> 用 <code>hidden</code> 屬性互相切換
+</div>
+
+<h3>5. 開始匯出</h3>
+<div class="annotation">
+  <strong>觸發：</strong>點 <code>#btn-export</code><br>
+  <strong>動作：</strong>讀取 scope（全部/選擇）、勾選的 table、選項 (noData/noSchema) → fetch POST <code>/api/export</code> → 拿到 jobId → 呼叫 <code>pollJob()</code> 輪詢進度
+</div>
+
+<h3>6. 匯入兩步流程</h3>
+<div class="annotation">
+  <strong>步驟 1：</strong>點 <code>#btn-inspect</code> → 用 FormData 上傳檔案 → 回傳 diff 後產生對照表<br>
+  <strong>步驟 2：</strong>點 <code>#btn-import</code> → fetch POST <code>/api/import/run</code> → 輪詢進度
+</div>
+
+<h3>7. pollJob() 輪詢函式</h3>
+<pre><span class="kw">async function</span> <span class="kw">pollJob</span>(id, logSel, resultSel, onDone) {
+  <span class="kw">while</span> (<span class="kw">true</span>) {
+    <span class="kw">const</span> job = <span class="kw">await</span> fetch(<span class="str">`/api/jobs/${id}`</span>).then(x =&gt; x.json());
+    $(logSel).textContent = (job.progress || []).map(p =&gt; p.line).join(<span class="str">'\n'</span>);
+    <span class="kw">if</span> (job.status === <span class="str">'done'</span>)  { $(resultSel).innerHTML = onDone(job); <span class="kw">return</span>; }
+    <span class="kw">if</span> (job.status === <span class="str">'error'</span>) { ...錯誤訊息... <span class="kw">return</span>; }
+    <span class="kw">await</span> <span class="kw">new</span> Promise(r =&gt; setTimeout(r, <span class="str">800</span>));  <span class="cm">// 0.8 秒輪詢一次</span>
+  }
+}</pre>
+
+<h2>三種狀態色碼</h2>
+<table>
+  <tr><th>狀態</th><th>色號</th><th>樣式來源</th></tr>
+  <tr><td>連線成功</td><td>綠 <code>#059669</code></td><td><code>#conn-status.ok</code></td></tr>
+  <tr><td>連線失敗</td><td>紅 <code>#dc2626</code></td><td><code>#conn-status.err</code></td></tr>
+  <tr><td>主按鈕</td><td>藍 <code>#3b82f6</code></td><td><code>button</code> 預設</td></tr>
+  <tr><td>已存在（將覆寫）</td><td>橘 <code>#b45309</code></td><td><code>.exists-yes</code></td></tr>
+  <tr><td>不存在（新建）</td><td>綠 <code>#059669</code></td><td><code>.exists-no</code></td></tr>
+  <tr><td>header 背景</td><td>深灰 <code>#1f2937</code></td><td><code>header</code></td></tr>
+</table>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DB Migrator — 使用手冊</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="screenshots.css" />
+</head>
+<body>
+<script src="docs-nav.js"></script>
+<div class="hero">
+  <h1>📖 使用手冊</h1>
+  <p>給第一次使用 DB Migrator 的客戶。從註冊到匯出 / 匯入完整步驟。畫面是直接渲染真實 HTML / CSS，不是手畫的。</p>
+  <a class="back" href="方案首頁.html">← 文件首頁</a>
+</div>
+<main>
+
+<div class="card">
+  <h2>📚 章節導覽</h2>
+  <div class="toc">
+    <ul>
+      <li><a href="#s1">系統需求</a></li>
+      <li><a href="#s2">第一次：註冊試用</a></li>
+      <li><a href="#s3">登入</a></li>
+      <li><a href="#s4">介面總覽</a></li>
+      <li><a href="#s5">匯出資料庫</a></li>
+      <li><a href="#s6">匯入資料庫</a></li>
+      <li><a href="#s7">專案備份還原</a></li>
+      <li><a href="#s8">試用版限制</a></li>
+      <li><a href="#s9">升級購買</a></li>
+      <li><a href="#s10">常見問題 Q&amp;A</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="card" id="s1">
+  <h2>1. 系統需求</h2>
+  <ul>
+    <li>一台 Windows / macOS / Linux 電腦</li>
+    <li>瀏覽器：Chrome / Edge / Firefox 最新版</li>
+    <li>網路連線（用於登入授權伺服器）</li>
+    <li>要匯出 / 匯入的資料庫帳號密碼</li>
+  </ul>
+  <div class="note">本工具不需要安裝資料庫 CLI（mysqldump / pg_dump 等），全部透過 driver 直接連。</div>
+</div>
+
+<div class="card" id="s2">
+  <h2>2. 第一次：註冊試用</h2>
+  <p>打開 DB Migrator 網頁。第一次會看到上方的 banner 提示。</p>
+
+  <h3>步驟 1 ─ 點右上角的 🔑 圖示</h3>
+  <div class="ui-shot">
+    <header>
+      <div class="header-actions">
+        <h1>資料庫匯出 / 匯入</h1>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <a class="btn-help">📖</a>
+          <button class="btn-help highlight">🔑</button>
+          <button class="btn-help">?</button>
+        </div>
+      </div>
+    </header>
+    <div class="banner expired">⛔ Not logged in · <span style="text-decoration:underline">登入 / 輸入 license</span> · 購買 [online]</div>
+  </div>
+
+  <h3>步驟 2 ─ 在彈出視窗中按「註冊試用 (7 天)」</h3>
+  <div class="ui-shot">
+    <div class="lm-box">
+      <h2>License <span class="tag">online</span></h2>
+      <div id="lm-info">狀態：unknown</div>
+      <h3>登入</h3>
+      <div class="form-row" style="flex-direction:column; align-items:stretch; gap:6px;">
+        <input class="input-text" type="email" placeholder="email" value="me@example.com" />
+        <input class="input-text" type="password" placeholder="password" value="••••••••" />
+      </div>
+      <div class="form-row">
+        <button>登入</button>
+        <button class="green highlight">註冊試用 (7 天)</button>
+        <button class="red">登出</button>
+      </div>
+      <p style="font-size:12px; min-height:16px; margin:6px 0 0; color:#6b7280;">填好按下，會寄驗證信...</p>
+    </div>
+  </div>
+
+  <h3>步驟 3 ─ 收驗證信</h3>
+  <p>系統會寄一封信到您填的 email。點信中的「驗證連結」啟用帳號。</p>
+  <div class="warn">密碼長度需要 8 個字元以上。建議用 1Password / Bitwarden 等密碼管理器產生強密碼。</div>
+</div>
+
+<div class="card" id="s3">
+  <h2>3. 登入</h2>
+  <p>驗證 email 後，回到 DB Migrator → 🔑 → 填入 email + 密碼 → 按「登入」。</p>
+
+  <h3>登入成功後 banner 會變這樣</h3>
+  <div class="ui-shot">
+    <header>
+      <div class="header-actions">
+        <h1>資料庫匯出 / 匯入</h1>
+        <div style="display:flex; gap:8px;">
+          <a class="btn-help">📖</a>
+          <button class="btn-help">🔑</button>
+          <button class="btn-help">?</button>
+        </div>
+      </div>
+    </header>
+    <div class="banner trial">⏳ 試用中 me@example.com — 剩 <b>7</b> 天 · <span style="text-decoration:underline">管理</span> [online]</div>
+  </div>
+
+  <div class="note">登入後 token 會存在這台電腦的瀏覽器內，下次打開不用再登入。換電腦會被踢出（同帳號同時只能 1 台用）。</div>
+</div>
+
+<div class="card" id="s4">
+  <h2>4. 介面總覽</h2>
+  <p>整個介面分為四步。以下是真實 UI 的渲染：</p>
+
+  <h3>第一步：選 DB 類型卡片</h3>
+  <div class="ui-shot">
+    <main>
+      <section class="step">
+        <h2>1. 選擇資料庫類型</h2>
+        <div class="cards">
+          <button class="card"><div class="card-title">MySQL / MariaDB</div><div class="card-sub">純 mysql2 driver</div></button>
+          <button class="card"><div class="card-title">PostgreSQL</div><div class="card-sub">純 pg driver</div></button>
+          <button class="card selected"><div class="card-title">SQL Server</div><div class="card-sub">純 mssql driver</div></button>
+          <button class="card"><div class="card-title">SQLite</div><div class="card-sub">本機檔案</div></button>
+          <button class="card"><div class="card-title">Supabase</div><div class="card-sub">PostgreSQL + SSL</div></button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <h3>第二步：填連線設定</h3>
+  <div class="ui-shot">
+    <main>
+      <section class="step">
+        <h2>2. 連線設定 <span class="tag">mssql</span></h2>
+        <form class="form-grid">
+          <label>Server <input value="DESKTOP-PNPEK4O\SQLEXPRESS" /></label>
+          <label>Port <input placeholder="可空白" /></label>
+          <label>User <input value="sa" /></label>
+          <label>Password <input type="password" value="••••••••" /></label>
+        </form>
+        <div class="form-row" style="font-size:13px; color:#4b5563;">
+          <span>驗證方式：</span>
+          <label><input type="radio" checked /> SQL Server 帳號</label>
+          <label><input type="radio" /> Windows 帳號</label>
+        </div>
+        <div class="form-actions">
+          <button class="highlight">連線測試</button>
+          <span class="ok-text">成功，Microsoft SQL Server 2022</span>
+        </div>
+        <div class="mode-switch">
+          <button class="active">匯出</button>
+          <button>匯入</button>
+          <button>專案備份</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <h3>第二點五步：勾選資料庫（連線成功後跳出）</h3>
+  <div class="ui-shot">
+    <main>
+      <section class="step">
+        <h2>2.5 選擇資料庫 <span class="tag" style="background:#fef3c7;color:#92400e;">已選 1 個</span></h2>
+        <div class="form-row">
+          <button class="gray">全選</button>
+          <button class="gray">全不選</button>
+          <small style="color:#6b7280;">勾 1 個 → 可進一步選表；勾 2 個以上 → zip 打包</small>
+        </div>
+        <div class="tables-list">
+          <label><input type="checkbox" /> master</label>
+          <label><input type="checkbox" checked /> WCY</label>
+          <label><input type="checkbox" /> AdventureWorks</label>
+          <label><input type="checkbox" /> Northwind</label>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <h3>第三步：匯出 / 匯入 / 專案備份</h3>
+  <div class="ui-shot">
+    <main>
+      <section class="step">
+        <h2>3. 匯出</h2>
+        <div class="form-row">
+          <label><input type="radio" checked /> 全部匯出</label>
+          <label><input type="radio" /> 選擇資料表</label>
+        </div>
+        <div class="form-row">
+          <label><input type="checkbox" /> 只匯出結構 (no data)</label>
+          <label><input type="checkbox" /> 只匯出資料 (no schema)</label>
+        </div>
+        <button class="highlight">開始匯出</button>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="card" id="s5">
+  <h2>5. 匯出資料庫</h2>
+
+  <h3>步驟</h3>
+  <ol>
+    <li>點要的 DB 卡片（例 MySQL）</li>
+    <li>填 Host、Port、User、Password</li>
+    <li>按「連線測試」</li>
+    <li>勾選要匯的資料庫</li>
+    <li>選範圍 / 進階選項</li>
+    <li>按「開始匯出」</li>
+  </ol>
+
+  <h3>匯出進度（真實 log 區渲染）</h3>
+  <div class="ui-shot">
+    <main>
+      <section class="step">
+        <h2>3. 匯出</h2>
+        <div class="log">Dumping 4 table(s)
+&gt; users
+  users: 5000 rows...
+  users: 12345 rows done
+&gt; orders
+  orders: 5000 rows...
+  orders: 8902 rows done
+&gt; products
+  products: 234 rows done
+&gt; categories
+  categories: 12 rows done
+SET FOREIGN_KEY_CHECKS=1;
+Done</div>
+        <div style="font-size:13px; color:#1f2937;">✅ 完成 — <a href="#" style="color:#3b82f6;">下載檔案</a></div>
+      </section>
+    </main>
+  </div>
+
+  <h3>勾數 vs 結果</h3>
+  <table>
+    <tr><th>勾選數</th><th>輸出</th><th>能用「選表」</th></tr>
+    <tr><td>1 個 DB</td><td>單一 .sql 檔</td><td>✅ 可</td></tr>
+    <tr><td>2+ 個 DB</td><td>dumps.zip 內含每 DB 一檔</td><td>❌ 自動鎖成「全部」</td></tr>
+  </table>
+</div>
+
+<div class="card" id="s6">
+  <h2>6. 匯入資料庫</h2>
+  <ol>
+    <li>同樣先選 DB 類型 → 填連線 → 連線測試</li>
+    <li>勾選 <strong>一個</strong> 目標資料庫</li>
+    <li>切到「匯入」分頁</li>
+    <li>選 SQL 檔，按「檢查內容」</li>
+  </ol>
+
+  <h3>對照表（真實 UI）</h3>
+  <div class="ui-shot">
+    <main>
+      <section class="step">
+        <h2>3. 匯入</h2>
+        <div class="form-row">
+          <label>選擇 SQL 檔 <input type="file" /></label>
+          <button>檢查內容</button>
+        </div>
+        <h3>資料表對照</h3>
+        <table class="diff-table">
+          <thead><tr><th></th><th>資料表</th><th>目標 DB 狀態</th></tr></thead>
+          <tbody>
+            <tr><td><input type="checkbox" checked /></td><td>users</td><td class="exists-no">不存在（新建）</td></tr>
+            <tr><td><input type="checkbox" checked /></td><td>orders</td><td class="exists-yes">已存在（將覆寫）</td></tr>
+            <tr><td><input type="checkbox" checked /></td><td>products</td><td class="exists-no">不存在（新建）</td></tr>
+          </tbody>
+        </table>
+        <button class="highlight">執行匯入</button>
+      </section>
+    </main>
+  </div>
+
+  <div class="danger">「已存在（將覆寫）」表示目標 DB 那張表會被 DROP + 重建，原本的資料會消失！執行前確認過再按。</div>
+</div>
+
+<div class="card" id="s7">
+  <h2>7. 專案備份還原</h2>
+  <p>一次備份「程式碼 + 資料庫 + Supabase Storage」三件事，打包成一個 backup.zip。</p>
+
+  <h3>備份介面（真實 UI）</h3>
+  <div class="ui-shot">
+    <main>
+      <section class="step">
+        <h2>3. 專案備份 / 還原</h2>
+        <div class="mode-switch" style="margin-top:0;">
+          <button class="active">備份</button>
+          <button>還原</button>
+        </div>
+        <h3>勾選要備份的層</h3>
+        <div class="proj-block">
+          <label class="proj-toggle"><input type="checkbox" checked /> <b>程式碼 (Git)</b></label>
+          <div class="proj-fields">
+            <label>GitHub Repo URL <input value="https://github.com/me/my-app.git" /></label>
+            <label>PAT (Personal Access Token) <input type="password" value="••••••••" /></label>
+            <label>Branch <input placeholder="main (可空)" /></label>
+          </div>
+        </div>
+        <div class="proj-block">
+          <label class="proj-toggle"><input type="checkbox" checked /> <b>資料庫</b></label>
+          <div class="proj-fields">
+            <small style="color:#6b7280;">使用上方主連線設定。請先在「2. 連線設定」測試成功，並在「2.5」勾<b>一個</b> DB。</small>
+          </div>
+        </div>
+        <div class="proj-block">
+          <label class="proj-toggle"><input type="checkbox" /> <b>Supabase Storage</b></label>
+        </div>
+        <button class="highlight">開始備份</button>
+      </section>
+    </main>
+  </div>
+
+  <div class="warn">試用版不能用專案備份功能，按鈕會 disabled。</div>
+</div>
+
+<div class="card" id="s8">
+  <h2>8. 試用版限制</h2>
+  <table>
+    <tr><th>功能</th><th>試用 (7 天)</th><th>Basic / Team / Enterprise</th></tr>
+    <tr><td>連線 + 列資料庫</td><td>✅</td><td>✅</td></tr>
+    <tr><td>單一 DB 匯出 / 匯入</td><td>✅</td><td>✅</td></tr>
+    <tr><td>多 DB 一次匯出</td><td>❌（只能勾 1 個）</td><td>✅</td></tr>
+    <tr><td>專案備份 / 還原</td><td>❌</td><td>✅</td></tr>
+    <tr><td>同時可使用裝置</td><td>1 台</td><td>1 / 5 / 999 台</td></tr>
+    <tr><td>匯出檔大小</td><td>≤ 50MB</td><td>無限制</td></tr>
+  </table>
+
+  <h3>試用版被擋下時的畫面</h3>
+  <div class="ui-shot">
+    <main>
+      <section class="step">
+        <div class="banner trial" style="margin: -16px -20px 14px;">⏳ 試用中 — 剩 5 天</div>
+        <h2>2.5 選擇資料庫 <span class="tag" style="background:#fef3c7;color:#92400e;">已選 2 個</span></h2>
+        <div class="tables-list">
+          <label><input type="checkbox" checked /> master</label>
+          <label><input type="checkbox" checked /> WCY</label>
+          <label><input type="checkbox" disabled /> AdventureWorks <span style="color:#9ca3af; font-size:11px;">（試用版只能勾 1 個）</span></label>
+        </div>
+        <div style="margin-top:10px; padding:10px; background:#fef3c7; border-radius:4px; font-size:13px; color:#78350f;">
+          ⚠ 試用版不支援多資料庫一次匯出。<a href="#" style="color:#78350f; text-decoration:underline;">升級方案</a>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="card" id="s9">
+  <h2>9. 升級購買</h2>
+  <table>
+    <tr><th>方案</th><th>裝置數</th><th>適合</th></tr>
+    <tr><td><strong>Basic</strong></td><td>1 台</td><td>個人使用</td></tr>
+    <tr><td><strong>Team</strong></td><td>5 台</td><td>小團隊</td></tr>
+    <tr><td><strong>Enterprise</strong></td><td>不限</td><td>公司全員</td></tr>
+  </table>
+
+  <h3>購買後 banner 變成這樣</h3>
+  <div class="ui-shot">
+    <header>
+      <div class="header-actions">
+        <h1>資料庫匯出 / 匯入</h1>
+        <div style="display:flex; gap:8px;">
+          <a class="btn-help">📖</a>
+          <button class="btn-help">🔑</button>
+          <button class="btn-help">?</button>
+        </div>
+      </div>
+    </header>
+    <div class="banner licensed">✅ me@example.com — 方案 <b>team</b>，剩 365 天 [online]</div>
+  </div>
+
+  <h3>購買流程</h3>
+  <ol>
+    <li>聯繫我們（email：<code>your-email@example.com</code>）</li>
+    <li>付款</li>
+    <li>我們升級您現有帳號 → 30 秒內 banner 會自動更新</li>
+  </ol>
+</div>
+
+<div class="card" id="s10">
+  <h2>10. 常見問題 Q&amp;A</h2>
+
+  <h3>Q：被踢的時候畫面長這樣</h3>
+  <div class="ui-shot">
+    <header>
+      <div class="header-actions">
+        <h1>資料庫匯出 / 匯入</h1>
+        <div style="display:flex; gap:8px;"><a class="btn-help">📖</a><button class="btn-help">🔑</button><button class="btn-help">?</button></div>
+      </div>
+    </header>
+    <div class="banner kicked">🚫 您的帳號在另一台電腦使用，本機已被踢出 · <span style="text-decoration:underline">重新登入</span> [online]</div>
+  </div>
+
+  <h3>Q&amp;A 列表</h3>
+  <table>
+    <tr><th>問題</th><th>回答</th></tr>
+    <tr><td>換電腦了，原本那台還能用嗎？</td><td>不行。同帳號同時只能 1 台（Team 5 台）。新電腦登入時，原本那台 30 秒內會被踢，看到上面那個畫面。</td></tr>
+    <tr><td>我家網路 IP 一直變</td><td>會被一直踢。請聯繫升級到 Team 方案（同時 5 台），或設定 IP 白名單。</td></tr>
+    <tr><td>忘記密碼</td><td>目前需聯繫客服手動重設（自助 reset 功能 roadmap 上）。</td></tr>
+    <tr><td>匯出哪些 DB</td><td>MySQL、MariaDB、PostgreSQL、SQL Server (含 SQLEXPRESS)、SQLite、Supabase</td></tr>
+    <tr><td>匯出檔包含敏感資料嗎</td><td>包含 DB 裡所有資料，請保管好下載的檔案。</td></tr>
+    <tr><td>Supabase 連不上 / SSL 錯</td><td>請點「Supabase」卡片（自動啟用 SSL），不是「PostgreSQL」卡片。</td></tr>
+  </table>
+</div>
+
+<div class="footer-note">
+  📅 文件更新：2026-05-16　|　DB Migrator v0.2.0　|　如有問題請聯繫客服
+</div>
+
+</main>
+</body>
+</html>

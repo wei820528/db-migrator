@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HANDOVER — DB Migrator 完整交接</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="screenshots.css" />
+</head>
+<body>
+<script src="docs-nav.js"></script>
+<div class="hero">
+  <h1>💻 完整交接文件</h1>
+  <p>給接手工程師的完整交接：架構、檔案結構、每個模組怎麼改、踩坑、未完事項。文件用真實程式碼渲染 UI（非手畫）。</p>
+  <a class="back" href="方案首頁.html">← 文件首頁</a>
+</div>
+<main>
+
+<div class="card">
+  <h2>📚 章節導覽</h2>
+  <div class="toc">
+    <ul>
+      <li><a href="#h1">10 秒簡介</a></li>
+      <li><a href="#h2">三件元件</a></li>
+      <li><a href="#h3">完整檔案結構</a></li>
+      <li><a href="#h4">核心 UI（真實渲染）</a></li>
+      <li><a href="#h5">Adapter 介面契約</a></li>
+      <li><a href="#h6">License 三模式</a></li>
+      <li><a href="#h7">Plugin host</a></li>
+      <li><a href="#h8">Job 系統</a></li>
+      <li><a href="#h9">前端模組</a></li>
+      <li><a href="#h10">License Server 內部</a></li>
+      <li><a href="#h11">本機開發環境</a></li>
+      <li><a href="#h12">部署到 production</a></li>
+      <li><a href="#h13">已知踩坑</a></li>
+      <li><a href="#h14">未完事項清單</a></li>
+      <li><a href="#h15">緊急聯絡</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="card" id="h1">
+  <h2>1. 10 秒簡介</h2>
+  <p><b>DB Migrator</b> 是瀏覽器操作的資料庫匯出 / 匯入 + 專案備份還原工具，**商業授權**（試用 7 天 → 付費）。</p>
+  <ul>
+    <li>支援 5 種 DB：MySQL、PostgreSQL、SQL Server、SQLite、Supabase</li>
+    <li>純 driver 實作，不需安裝 mysqldump 等 CLI</li>
+    <li>有兩個對等實作版本：Node.js + Express、.NET 8 + ASP.NET Core，前端共用</li>
+    <li>另有獨立的 <b>License Server</b>（Node + SQLite）負責授權 / 計費 / IP 紀錄</li>
+    <li>拼圖式 plugin 架構：丟一個 .js / .cs 進 plugins/ 即生效</li>
+  </ul>
+</div>
+
+<div class="card" id="h2">
+  <h2>2. 三件元件</h2>
+  <div class="diagram">
+[License Server  port 4000]    ← 你（owner）的 VPS
+       ▲ heartbeat 30s
+       │
+[DB Migrator Node    3000]     [DB Migrator .NET    3001]
+       │                              │
+       ▼ DB driver                    ▼ DB driver
+[ Customer's databases ]
+  </div>
+  <table>
+    <tr><th>元件</th><th>放在</th><th>誰跑</th></tr>
+    <tr><td>License Server</td><td>你的 VPS / 本機</td><td>你（owner）</td></tr>
+    <tr><td>DB Migrator (Node)</td><td>客戶機器</td><td>客戶</td></tr>
+    <tr><td>DB Migrator (.NET)</td><td>客戶機器</td><td>客戶（如果偏好 .NET）</td></tr>
+  </table>
+</div>
+
+<div class="card" id="h3">
+  <h2>3. 完整檔案結構</h2>
+  <pre><code>F:\匯出資料庫的bat\
+├── README.md                         整體入口
+├── LICENSE                           PolyForm Free Trial 1.0.0
+├── COMMERCIAL.md                     商業授權條款 + 購買流程
+├── CONTRIBUTING.md, SECURITY.md, CHANGELOG.md
+├── .gitignore, .github/              CI + Issue/PR templates
+│
+├── node-express/                     ===== Node 版 DB Migrator =====
+│   ├── server.js                     Express + safeMount + plugin host
+│   ├── package.json
+│   ├── adapters/                     5 個 DB 各一檔 + index.js
+│   │   ├── _shared.js                共用 helper（escape / split / 等）
+│   │   ├── mysql.js, postgres.js, mssql.js, sqlite.js
+│   │   └── index.js                  lazy load + registerAdapter
+│   ├── routes/                       6 個 route 模組
+│   │   ├── connection.js, export.js, import.js, jobs.js, project.js, license.js
+│   ├── lib/
+│   │   ├── jobs.js                   in-memory job map
+│   │   ├── pluginHost.js             掃 plugins/ + hot reload
+│   │   ├── github.js                 git clone / push (simple-git)
+│   │   ├── supabaseStorage.js        Supabase Storage REST API
+│   │   ├── license.js                offline / online mode 切換
+│   │   ├── license-offline.js        Ed25519 簽章驗證
+│   │   └── license-online.js         heartbeat client
+│   ├── public/                       前端 (HTML/CSS/JS)
+│   │   ├── index.html, app.js, style.css, tour.js
+│   │   └── docs/                     /docs 路徑的線上文件
+│   ├── plugins/                      ★ 拖拉式 plugin 資料夾
+│   │   ├── README.md
+│   │   └── hello/index.js            範例
+│   └── tmp/                          (.gitignore) 匯出檔暫存
+│
+├── dotnet8/                          ===== .NET 版 DB Migrator =====
+│   ├── Program.cs                    Kestrel + DI + middleware
+│   ├── DbMigrator.Web.csproj
+│   ├── Adapters/                     對應 Node 的 adapters/
+│   │   ├── IDatabaseAdapter.cs + AdapterRegistry
+│   │   ├── SqlHelpers.cs (= _shared.js)
+│   │   ├── MySqlAdapter, PostgresAdapter, MsSqlAdapter, SqliteAdapter
+│   ├── Controllers/                  對應 Node 的 routes/
+│   ├── Services/                     對應 Node 的 lib/
+│   │   ├── JobService, GitHubService, SupabaseStorageService
+│   │   └── LicenseService            (offline only, 沒 online client)
+│   ├── Models/                       Plain DTOs
+│   ├── Plugins/                      ★ .NET 版 plugin 資料夾
+│   │   └── HelloController.cs + IPluginUiContributor.cs
+│   └── wwwroot/                      = node-express/public/
+│
+├── license-server/                   ===== License Server =====
+│   ├── server.js                     Express + 所有 endpoints
+│   ├── db.js                         SQLite schema + auto-migrate
+│   ├── plans.js                      plan 定義
+│   ├── admin-cli.js                  CLI 管理
+│   ├── lib/
+│   │   ├── email.js                  nodemailer SMTP
+│   │   └── ip.js                     IP 白名單比對
+│   ├── routes/
+│   │   ├── admin.js                  ⚠ 待補（Web UI 用）
+│   │   └── stripe.js                 ⚠ 待補
+│   ├── public/admin.html             ⚠ 待補（admin web UI）
+│   ├── README.md
+│   └── license.db                    (.gitignore) SQLite 檔
+│
+├── license-tools/                    ===== 你私用 =====
+│   ├── generate-keypair.js           一次性產 Ed25519 keypair
+│   ├── issue-license.js              簽 offline license
+│   ├── README.md
+│   ├── public-key.pem                嵌進 client（可 commit）
+│   └── private-key.pem               (.gitignore) 絕不可 commit
+│
+└── 文件/                             ===== 中文 HTML 文件 =====
+    ├── 方案首頁.html, 架構展示, 區塊參考, 技術文件, 程式碼對應
+    ├── 操作文件, 使用手冊, 進度文件, 重構計畫, 優化擴充建議
+    ├── HANDOVER.html (本檔)
+    ├── style.css, screenshots.css, docs-nav.js
+    └── node-express/, dotnet8/       (兩版專屬子文件)</code></pre>
+</div>
+
+<div class="card" id="h4">
+  <h2>4. 核心 UI（真實 HTML 渲染）</h2>
+  <p>下方所有方框都是把 <code>node-express/public/index.html</code> 的真實程式碼 inline 渲染出來，不是手畫的 mockup。</p>
+
+  <h3>4.1 主畫面：DB 卡片 → 連線 → DB 勾選</h3>
+  <div class="ui-shot">
+    <header>
+      <div class="header-actions">
+        <h1>資料庫匯出 / 匯入</h1>
+        <div style="display:flex; gap:8px;"><a class="btn-help">📖</a><button class="btn-help">🔑</button><button class="btn-help">?</button></div>
+      </div>
+    </header>
+    <div class="banner trial">⏳ 試用中 alice@example.com — 剩 5 天</div>
+    <main>
+      <section class="step">
+        <h2>1. 選擇資料庫類型</h2>
+        <div class="cards">
+          <button class="card"><div class="card-title">MySQL / MariaDB</div><div class="card-sub">純 mysql2 driver</div></button>
+          <button class="card"><div class="card-title">PostgreSQL</div><div class="card-sub">純 pg driver</div></button>
+          <button class="card selected"><div class="card-title">SQL Server</div><div class="card-sub">純 mssql driver</div></button>
+          <button class="card"><div class="card-title">SQLite</div><div class="card-sub">本機檔案</div></button>
+          <button class="card"><div class="card-title">Supabase</div><div class="card-sub">PostgreSQL + SSL</div></button>
+        </div>
+      </section>
+      <section class="step">
+        <h2>2. 連線設定 <span class="tag">mssql</span></h2>
+        <form class="form-grid">
+          <label>Server <input value="DESKTOP-PNPEK4O\SQLEXPRESS" /></label>
+          <label>Port <input placeholder="可空白" /></label>
+          <label>User <input value="sa" /></label>
+          <label>Password <input type="password" value="••••••" /></label>
+        </form>
+        <div class="form-actions">
+          <button>連線測試</button>
+          <span class="ok-text">成功，Microsoft SQL Server 2022</span>
+        </div>
+        <div class="mode-switch">
+          <button class="active">匯出</button>
+          <button>匯入</button>
+          <button>專案備份</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <h3>4.2 License modal（online mode）</h3>
+  <div class="ui-shot">
+    <div class="lm-box">
+      <h2>License <span class="tag">online</span></h2>
+      <div id="lm-info">alice@example.com — 方案 trial — 狀態 trial（剩 5 天）<br>
+        <small style="color:#6b7280">features: {"bulk_export":false,"multi_db_count_max":1,"project_backup":false}</small>
+      </div>
+      <h3>登入</h3>
+      <div class="form-row" style="flex-direction:column; align-items:stretch; gap:6px;">
+        <input class="input-text" type="email" value="alice@example.com" />
+        <input class="input-text" type="password" value="••••••••" />
+      </div>
+      <div class="form-row">
+        <button>登入</button>
+        <button class="green">註冊試用 (7 天)</button>
+        <button class="red">登出</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" id="h5">
+  <h2>5. Adapter 介面契約</h2>
+
+  <h3>Node 介面（convention）</h3>
+  <pre><code>// adapters/&lt;type&gt;.js — 必須 export 這 5 個 + type
+module.exports = {
+  type: 'mysql',
+  testConnection(conn)             → { ok, version, databases? }
+  listTables(conn)                 → [{ name, rowEstimate }]
+  dump(conn, options, outFile, onProgress)  → 寫檔
+  restore(conn, sqlFilePath, onProgress)
+  parseTableNamesFromDump(sqlFilePath)      → [tableName]
+};</code></pre>
+
+  <h3>.NET 介面（強型別）</h3>
+  <pre><code>public interface IDatabaseAdapter {
+    string Type { get; }
+    Task&lt;TestResult&gt; TestConnectionAsync(DbConnectionInfo conn);
+    Task&lt;List&lt;TableInfo&gt;&gt; ListTablesAsync(DbConnectionInfo conn);
+    Task DumpAsync(DbConnectionInfo conn, ExportOptions options, string outFilePath, Action&lt;string&gt;? onProgress, CancellationToken ct);
+    Task RestoreAsync(DbConnectionInfo conn, string sqlFilePath, Action&lt;string&gt;? onProgress, CancellationToken ct);
+    List&lt;string&gt; ParseTableNamesFromDump(string sqlFilePath);
+}</code></pre>
+
+  <p>新增 DB 類型 → 詳見 <a href="程式碼與區塊對應文件.html#new-db">程式碼對應文件 / 加新 DB 類型</a></p>
+</div>
+
+<div class="card" id="h6">
+  <h2>6. License 三模式</h2>
+  <table>
+    <tr><th>Mode</th><th>觸發</th><th>機制</th></tr>
+    <tr><td><b>offline</b></td><td>預設</td><td>讀本機 license.key（Ed25519）+ 32 天試用</td></tr>
+    <tr><td><b>online</b></td><td>LICENSE_MODE=online + LICENSE_SERVER_URL=...</td><td>登入 license server，每 30 秒 heartbeat，IP 換被踢</td></tr>
+    <tr><td><b>disabled</b></td><td>LICENSE_MODE=disabled</td><td>完全不檢查（dev only）</td></tr>
+  </table>
+
+  <h3>Gate middleware 邏輯</h3>
+  <div class="diagram">
+HTTP request /api/*
+       │
+       ▼
+┌──────────────────┐
+│ /api/license/*   │── yes ──► next() (always)
+│ /api/modules?    │
+└──────────────────┘
+       │ no
+       ▼
+   mode == disabled? ── yes ──► next()
+       │ no
+       ▼
+   mode == online?
+   │
+   ├─ no token              → 402 Not logged in
+   ├─ kicked                → 401 Session kicked
+   ├─ status=expired        → 402 License expired
+   ├─ status=offline        → 503 Cannot reach license server
+   ├─ feature gate
+   │   ├─ POST /api/export with N DBs > features.multi_db_count_max
+   │   │   → 403 "您的方案最多可一次匯出 N 個"
+   │   ├─ bulk_export=false &amp;&amp; N>1
+   │   │   → 403 "試用版不支援多資料庫匯出"
+   │   └─ /api/project/* &amp;&amp; project_backup=false
+   │       → 403 "試用版不支援專案備份"
+   └─ next()
+       │
+       ▼ (offline mode)
+   status=expired? ── yes ──► 402 License required
+   else next()
+  </div>
+</div>
+
+<div class="card" id="h7">
+  <h2>7. Plugin Host（Node 版）</h2>
+  <p><code>lib/pluginHost.js</code> — 掃 <code>plugins/</code> 資料夾，自動載入 + hot reload。</p>
+
+  <h3>支援的 plugin 形態</h3>
+  <pre><code>module.exports = {
+  mount?:   '/api/foo',                    // Express route
+  router?:  &lt;express.Router&gt;,
+  adapter?: { type: 'foo', handler: { testConnection, ... } },
+  ui?: {
+    cards?: [{ type, title, sub, port? }],
+    tabs?:  [{ id, label, html, scripts? }],
+    scripts?: [...]
+  },
+  static?: 'public'   // 資料夾名，自動 serve 在 /plugins/static/&lt;name&gt;/
+};</code></pre>
+
+  <h3>關鍵設計：route proxy（讓 hot reload 不用重新 mount）</h3>
+  <pre><code>// pluginHost 內部
+const proxy = (req, res, next) =&gt; {
+  const handler = currentPlugin.router;  // ← 隨時 swap
+  return handler(req, res, next);
+};
+app.use(mount, proxy);   // 永遠掛這個 proxy
+
+// 重新 require plugin 後：
+currentPlugin.router = newRouterInstance;   // 直接換內部 handler</code></pre>
+</div>
+
+<div class="card" id="h8">
+  <h2>8. Job 系統</h2>
+  <ul>
+    <li>匯出 / 匯入 / 專案備份都是長時間任務 → 走 job pattern</li>
+    <li>Node：<code>lib/jobs.js</code> Map，1 小時自動清</li>
+    <li>.NET：<code>Services/JobService.cs</code> ConcurrentDictionary，無清理</li>
+    <li>API：POST 啟動回 jobId → 前端 800ms 一次 poll <code>/api/jobs/:id</code></li>
+    <li><b>缺點</b>：server 重啟 → job 全失。已列入 <a href="重構計畫.html#r-03">重構 R-03</a></li>
+  </ul>
+</div>
+
+<div class="card" id="h9">
+  <h2>9. 前端模組（單檔 app.js）</h2>
+  <p><code>public/app.js</code> 約 700 行，按職責分區：</p>
+  <table>
+    <tr><th>區段</th><th>大概行數</th><th>負責</th></tr>
+    <tr><td>state + presets</td><td>1-100</td><td>localStorage 連線記憶</td></tr>
+    <tr><td>card click handler</td><td>100-180</td><td>切換 DB 類型 + 表單預設</td></tr>
+    <tr><td>readConn / connection test</td><td>180-260</td><td>讀表單 + 呼叫 /api/connection/test</td></tr>
+    <tr><td>databases checkbox</td><td>260-330</td><td>渲染 DB 列表 + 多選邏輯</td></tr>
+    <tr><td>export / import handlers</td><td>330-450</td><td>送 /api/export, /api/import</td></tr>
+    <tr><td>project backup / restore</td><td>450-560</td><td>三層 checkbox + 上傳 zip</td></tr>
+    <tr><td>plugin UI loader</td><td>560-630</td><td>fetch /api/plugins/ui 動態渲染</td></tr>
+    <tr><td>license banner + modal</td><td>630-end</td><td>online / offline 兩種 modal</td></tr>
+  </table>
+  <p>已列入重構：<a href="重構計畫.html#r-05">R-05 拆檔模組化</a></p>
+</div>
+
+<div class="card" id="h10">
+  <h2>10. License Server 內部</h2>
+
+  <h3>SQLite schema（簡化）</h3>
+  <pre><code>users        id, email, password_hash, plan, max_devices,
+             trial_started_at, expires_at, email_verified,
+             ip_whitelist (JSON), free_until, stripe_customer_id
+
+sessions     id (token), user_id, ip, user_agent, last_seen
+event_log    id, user_id, ip, event, details (JSON), at
+admin_sessions  id (cookie), user_id, ip, last_seen</code></pre>
+
+  <h3>核心邏輯：checkUserStatus()</h3>
+  <pre><code>1. free_until &gt; now？ → return team-equivalent features (override)
+2. plan == 'trial'?
+     → 算 trial_started_at + duration_days
+     → 過期 return 'expired'
+     → 否則 return 'trial'
+3. expires_at &lt; now? → 'expired'
+4. 否則 'licensed'</code></pre>
+
+  <h3>核心邏輯：heartbeat 踢人</h3>
+  <pre><code>POST /api/auth/heartbeat
+1. session 存在？ → 不在 → 401 kicked
+2. session.ip == 當前 IP？ → 不同 → 刪 session + log + 401 kicked
+3. user 還在白名單？ → 不在 → 刪 session + 403
+4. checkUserStatus() ok？ → 不 ok → 403
+5. update last_seen → 200 + features</code></pre>
+</div>
+
+<div class="card" id="h11">
+  <h2>11. 本機開發環境</h2>
+  <pre><code># 一鍵起所有元件（開三個 PowerShell）
+
+# Terminal 1: License server
+cd F:\匯出資料庫的bat\license-server
+npm install
+npm start                    # http://localhost:4000
+
+# Terminal 2: Node DB Migrator
+cd F:\匯出資料庫的bat\node-express
+npm install
+$env:LICENSE_MODE="online"
+$env:LICENSE_SERVER_URL="http://localhost:4000"
+npm start                    # http://localhost:3000
+
+# Terminal 3 (optional): .NET DB Migrator
+cd F:\匯出資料庫的bat\dotnet8
+dotnet restore
+$env:LICENSE_MODE="online"
+$env:LICENSE_SERVER_URL="http://localhost:4000"
+dotnet run                   # http://localhost:3001
+
+# Terminal 4 (optional): admin CLI
+cd F:\匯出資料庫的bat\license-server
+node admin-cli.js create-user --email me@dev.local --password test1234</code></pre>
+</div>
+
+<div class="card" id="h12">
+  <h2>12. 部署到 production</h2>
+  <p>詳見 <a href="操作文件.html">操作文件</a>。重點：</p>
+  <ul>
+    <li>License Server 部署到 VPS，用 Caddy / nginx 終結 HTTPS</li>
+    <li>SMTP 設好（SendGrid / Mailgun）讓驗證信能發出</li>
+    <li>Stripe webhook URL 設好</li>
+    <li>客戶端 LICENSE_SERVER_URL 改成 https://license.your-domain.com</li>
+  </ul>
+</div>
+
+<div class="card" id="h13">
+  <h2>13. 已知踩坑</h2>
+  <table>
+    <tr><th>坑</th><th>解</th></tr>
+    <tr><td>CSS [hidden] 被 .form-grid display:grid 蓋過</td><td>style.css 開頭加 <code>[hidden] { display: none !important; }</code></td></tr>
+    <tr><td>MSSQL Login failed 錯誤訊息空白</td><td>從 SqlException.Errors[0].Message 撈內層</td></tr>
+    <tr><td>Empty port 字串 → .NET int 反序列化失敗 → ProblemDetails 沒 error 欄位 → 前端看到 undefined</td><td>前端 <code>port: portStr ? Number(portStr) : 0</code></td></tr>
+    <tr><td>SQL Server 連線：SSMS 用 Shared Memory 過、tedious 一定要 TCP/IP</td><td>SQL Server Configuration Manager 啟用 TCP/IP + 開 SQL Browser</td></tr>
+    <tr><td>better-sqlite3 Windows 安裝失敗</td><td>裝 VS Build Tools；不用 SQLite 可從 package.json 拿掉</td></tr>
+    <tr><td>LibGit2Sharp Linux 容器</td><td>Dockerfile 加 <code>apk add libgit2</code> 或 <code>apt install libgit2-dev</code></td></tr>
+    <tr><td>Supabase 用 PostgreSQL 卡片連 → SSL 拒絕</td><td>必須用 Supabase 卡片（自動 ssl=true）</td></tr>
+    <tr><td>Hot reload 改前端 .js 不會自動 invalidate</td><td>改 plugin 內的 .js 還是要 Ctrl+F5 重整瀏覽器</td></tr>
+  </table>
+</div>
+
+<div class="card" id="h14">
+  <h2>14. 未完事項清單</h2>
+  <p>詳見 <a href="進度文件.html">進度文件</a>。<b>v1.0.0 所有 P0 / P1 / P2 全完成。</b>剩餘 P3 延伸功能：</p>
+  <ul>
+    <li><b>C-07 Plugin marketplace</b>：UI 上「貼 GitHub URL → 一鍵裝 plugin」+ metadata + 簽章 + permission scopes</li>
+    <li><b>C-08 NoSQL adapter</b>：MongoDB / Redis dump+restore</li>
+    <li><b>Storage 並行下載 / 上傳</b>：目前單線程，大量檔案場景需平行</li>
+    <li><b>Stored procedures / functions / views / sequences (PG) / events (MySQL) dump</b>：DDL extras v2</li>
+    <li><b>License key 線上續期 / 撤銷</b>：admin UI 上一鍵 disable 任何已售出 license</li>
+    <li><b>完整 integration test</b>：docker-compose 起所有 DB 跑 adapter contract</li>
+  </ul>
+</div>
+
+<div class="card" id="h16">
+  <h2>16. v1.0.0 新增 (v0.1.0 → v1.0.0)</h2>
+  <ul>
+    <li><b>授權系統</b>：Online license server（admin UI + 客戶 portal + Stripe + 綠界 + 2FA + email 驗證 + rate limit + IP 白名單 + 免費月份）</li>
+    <li><b>.NET online client 整合</b>：跟 Node 對等</li>
+    <li><b>核心功能</b>：部分 table 多選匯入、完整 DDL（FK + index + trigger 全 4 DB）、Job 持久化、tmp 自動清理、排程備份（Node + .NET）</li>
+    <li><b>架構</b>：前端拆 13 個 module（utils / state / presets / license / connection / databases / tabs / export / import / project / schedule / plugin-ui / modules-status）</li>
+    <li><b>測試</b>：75+ 個自動測試（Node 18+ 內建 node:test，零 framework dep）；測試發現 2 個真 bug</li>
+    <li><b>文件</b>：12 份 HTML 中文文件（含真實 UI 渲染）</li>
+  </ul>
+  <p>詳見 <a href="../CHANGELOG.md">CHANGELOG.md</a></p>
+</div>
+
+<div class="card" id="h15">
+  <h2>15. 緊急聯絡</h2>
+  <ul>
+    <li>原作者 email：<code>your-email@example.com</code> ← placeholder，替換</li>
+    <li>緊急狀況：<a href="操作文件.html#emergency">操作文件 → 緊急</a></li>
+    <li>安全漏洞：<a href="../SECURITY.md">SECURITY.md</a></li>
+  </ul>
+</div>
+
+<div class="footer-note">
+  📅 文件更新：2026-05-16　|　DB Migrator v0.2.0　|　給接手的工程師
+</div>
+
+</main>
+</body>
+</html>

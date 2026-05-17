@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DB Migrator — 我的帳號</title>
+<link rel="stylesheet" href="admin.css" />
+<link rel="stylesheet" href="portal.css" />
+</head>
+<body>
+
+<!-- ========== LOGIN ========== -->
+<div id="login-screen" class="screen">
+  <div class="login-box">
+    <div class="logo-mini">DB</div>
+    <h1>我的帳號</h1>
+    <p class="subtitle">登入或註冊試用</p>
+    <form id="login-form">
+      <input type="email" id="login-email" placeholder="email" autocomplete="email" required />
+      <input type="password" id="login-password" placeholder="password" autocomplete="current-password" required />
+      <button type="submit">登入</button>
+      <button type="button" id="btn-register" style="background:#10b981;">註冊試用 (7 天)</button>
+    </form>
+    <form id="login-2fa-form" hidden style="margin-top:12px;border-top:1px solid #e5e7eb;padding-top:12px;">
+      <p style="margin:0 0 8px;color:#4b5563;">請輸入 Authenticator 的 6 位數驗證碼：</p>
+      <input id="login-2fa-code" type="text" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="one-time-code"
+             style="text-align:center;font-size:18px;letter-spacing:4px;" required />
+      <button type="submit">驗證</button>
+    </form>
+    <p id="login-msg" class="msg"></p>
+  </div>
+</div>
+
+<!-- ========== PORTAL SHELL ========== -->
+<div id="portal" hidden>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo-mini">DB</span>
+      <span>我的帳號</span>
+    </div>
+    <div class="topbar-right">
+      <span id="me-email" class="muted"></span>
+      <button id="btn-logout" class="btn-ghost">登出</button>
+    </div>
+  </header>
+
+  <main class="portal-main">
+    <!-- Hero card -->
+    <div class="hero-card">
+      <div>
+        <div class="muted">目前方案</div>
+        <h2 id="hero-plan">—</h2>
+        <div id="hero-status"></div>
+      </div>
+      <div class="hero-days">
+        <div id="hero-days-num">—</div>
+        <div class="muted">天剩餘</div>
+      </div>
+    </div>
+
+    <!-- Plans / upgrade -->
+    <div class="card">
+      <h2>升級方案</h2>
+      <p class="muted">下面是各方案的限制。按「升級」會跳轉到 Stripe 結帳。</p>
+      <div class="plan-grid" id="plan-grid"></div>
+    </div>
+
+    <!-- Sessions -->
+    <div class="card">
+      <h2>我的裝置 <span id="ses-count" class="muted"></span></h2>
+      <p class="muted">在線的所有裝置 / 瀏覽器。同帳號同時只能 <b id="max-dev">—</b> 個。換 IP 也會被踢。</p>
+      <table class="data-table" id="sessions-table">
+        <thead><tr><th>IP</th><th>User Agent</th><th>登入</th><th>最後活動</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div style="margin-top:10px;">
+        <button id="btn-kick-others" class="btn-warn">踢出其他所有裝置</button>
+      </div>
+    </div>
+
+    <!-- 2FA -->
+    <div class="card">
+      <h2>兩步驟驗證 (2FA) <span id="totp-status-tag"></span></h2>
+      <p class="muted">啟用後，登入時除了密碼，還需要輸入 Authenticator 產生的 6 位數驗證碼。</p>
+
+      <div id="totp-off" hidden>
+        <p>目前未啟用 2FA。</p>
+        <button id="btn-totp-setup" class="btn-primary">啟用 2FA</button>
+      </div>
+
+      <div id="totp-setup-flow" hidden>
+        <p>用 Authenticator (Google / Microsoft / 1Password 等) 掃描下面 QR：</p>
+        <div id="totp-qr" style="background:white;padding:12px;border:1px solid #e5e7eb;border-radius:8px;display:inline-block;"></div>
+        <p class="muted" style="font-size:12px;">或手動輸入 secret：<code id="totp-secret-text"></code></p>
+        <label style="display:block;margin:14px 0 4px;">輸入 Authenticator 顯示的 6 位數字以確認：</label>
+        <input id="totp-confirm-code" type="text" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="one-time-code"
+               style="width:160px;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:18px;letter-spacing:4px;text-align:center;" />
+        <div style="margin-top:12px;">
+          <button id="btn-totp-enable" class="btn-primary">確認啟用</button>
+          <button id="btn-totp-cancel" class="btn-ghost" style="color:#374151;border-color:#9ca3af;">取消</button>
+        </div>
+        <p id="totp-setup-msg" class="msg"></p>
+      </div>
+
+      <div id="totp-on" hidden>
+        <p>✅ 2FA 已啟用。</p>
+        <button id="btn-totp-disable" class="btn-warn">停用 2FA</button>
+      </div>
+    </div>
+
+    <!-- Change password -->
+    <div class="card">
+      <h2>變更密碼</h2>
+      <form id="pw-form">
+        <label>目前密碼 <input type="password" id="pw-old" autocomplete="current-password" required /></label>
+        <label>新密碼 (≥ 8 chars) <input type="password" id="pw-new" autocomplete="new-password" required minlength="8" /></label>
+        <button type="submit" class="btn-primary">變更</button>
+        <p id="pw-msg" class="msg"></p>
+      </form>
+    </div>
+  </main>
+</div>
+
+<script src="portal.js"></script>
+</body>
+</html>

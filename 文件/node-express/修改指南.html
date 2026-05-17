@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>修改指南 - DB Migrator (Node.js 版)</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; margin: 0; background: #f5f6f8; color: #1f2937; line-height: 1.7; }
+  header { background: linear-gradient(135deg, #047857, #065f46); color: #fff; padding: 24px 32px; }
+  header h1 { margin: 0; font-size: 22px; }
+  nav.topnav { background: #064e3b; padding: 10px 32px; }
+  nav.topnav a { color: #a7f3d0; text-decoration: none; margin-right: 18px; font-size: 14px; font-weight: 500; }
+  nav.topnav a:hover { color: #fff; text-decoration: underline; }
+  nav.topnav a.active { color: #fff; border-bottom: 2px solid #34d399; padding-bottom: 4px; }
+  main { max-width: 1000px; margin: 28px auto; padding: 0 24px 60px; }
+  h2 { color: #047857; border-bottom: 2px solid #d1fae5; padding-bottom: 6px; margin-top: 36px; }
+  h3 { color: #065f46; margin-top: 24px; }
+  code { background: #f3f4f6; padding: 1px 6px; border-radius: 3px; font-family: Consolas, monospace; font-size: 13px; color: #be123c; }
+  pre { background: #1f2937; color: #e5e7eb; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre .kw { color: #c4b5fd; }
+  pre .str { color: #86efac; }
+  pre .cm { color: #9ca3af; font-style: italic; }
+  pre .fn { color: #fbbf24; }
+  pre .add { background: rgba(16, 185, 129, 0.2); display: inline-block; width: 100%; }
+  pre .del { background: rgba(239, 68, 68, 0.2); display: inline-block; width: 100%; text-decoration: line-through; }
+  .scenario { background: #fff; border-radius: 8px; padding: 20px 24px; margin: 20px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 5px solid #10b981; }
+  .scenario h3 { margin-top: 0; color: #065f46; }
+  .scenario .where { background: #ecfdf5; padding: 6px 12px; border-radius: 4px; font-size: 13px; margin: 8px 0; display: inline-block; }
+  .scenario ol { margin: 8px 0; padding-left: 24px; }
+  .scenario ol li { margin: 6px 0; }
+  .tip { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 10px 14px; margin: 12px 0; font-size: 13px; border-radius: 4px; }
+  .warn { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 14px; margin: 12px 0; font-size: 13px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>✏️ 修改指南 - DB Migrator (Node.js 版)</h1>
+</header>
+<nav class="topnav">
+  <a href="../index.html">總覽</a>
+  <a href="index.html">本版首頁</a>
+  <a href="操作手冊.html">操作手冊</a>
+  <a href="function對照.html">Function 對照</a>
+  <a href="UI說明.html">UI 解析</a>
+  <a href="修改指南.html" class="active">修改指南</a>
+</nav>
+<main>
+
+<p style="background:#fef3c7; padding:12px 16px; border-radius:6px; border-left:4px solid #f59e0b;">
+這份指南列出常見的修改情境，每個情境告訴你 <strong>「動哪個檔」、「動哪一段」、「怎麼動」</strong>。所有路徑相對於 <code>F:\匯出資料庫的bat\node-express\</code>。
+</p>
+
+<h2>🟢 場景 1：換掉預設 port（不再用 3000）</h2>
+<div class="scenario">
+  <div class="where">📁 <code>server.js</code> 第 11 行</div>
+  <pre><span class="del">const PORT = process.env.PORT || 3000;</span>
+<span class="add">const PORT = process.env.PORT || 8080;  <span class="cm">// 改成你要的</span></span></pre>
+  <p>或不改 code，啟動時用環境變數：</p>
+  <pre>set PORT=8080
+npm start</pre>
+</div>
+
+<h2>🟢 場景 2：放大上傳檔大小限制（目前 1GB）</h2>
+<div class="scenario">
+  <div class="where">📁 <code>routes/import.js</code> 第 11 行</div>
+  <pre><span class="kw">const</span> upload = multer({
+  dest: path.<span class="fn">join</span>(TMP_DIR, <span class="str">'uploads'</span>),
+  <span class="del">limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB</span>
+  <span class="add">limits: { fileSize: 5 * 1024 * 1024 * 1024 }, // 5GB</span>
+});</pre>
+  <div class="warn">⚠️ 同時要注意：Node 預設 buffer 與 server 記憶體；超過幾 GB 建議改成串流寫入。</div>
+</div>
+
+<h2>🟢 場景 3：把進度查詢輪詢頻率從 0.8 秒改成 0.3 秒</h2>
+<div class="scenario">
+  <div class="where">📁 <code>public/app.js</code> 第 173 行</div>
+  <pre><span class="del">await new Promise((r) =&gt; setTimeout(r, 800));</span>
+<span class="add">await new Promise((r) =&gt; setTimeout(r, 300));</span></pre>
+  <div class="tip">💡 頻率太高會增加 server 負擔；太低會讓使用者覺得卡。建議 300–1000 ms。</div>
+</div>
+
+<h2>🟢 場景 4：改畫面色系（如要做企業版的紫色主題）</h2>
+<div class="scenario">
+  <div class="where">📁 <code>public/style.css</code> 多處</div>
+  <p>需要改的色號：</p>
+  <pre><span class="cm">// header 背景</span>
+header { background: <span class="del">#1f2937</span> <span class="add">#5b21b6</span>; ... }
+
+<span class="cm">// 主按鈕</span>
+button { background: <span class="del">#3b82f6</span> <span class="add">#7c3aed</span>; ... }
+button:hover { background: <span class="del">#2563eb</span> <span class="add">#6d28d9</span>; ... }
+
+<span class="cm">// 卡片 hover/選中邊框</span>
+.card:hover { border-color: <span class="del">#3b82f6</span> <span class="add">#7c3aed</span>; ... }
+.card.selected { border-color: <span class="del">#3b82f6</span> <span class="add">#7c3aed</span>; background: <span class="del">#eff6ff</span> <span class="add">#f5f3ff</span>; }</pre>
+</div>
+
+<h2>🟢 場景 5：加第 5 種資料庫（例如 Oracle）</h2>
+<div class="scenario">
+  <h3>需要動 3 個地方</h3>
+  <div class="where">📁 步驟 1：<code>adapters/oracle.js</code>（新建）</div>
+  <pre><span class="kw">const</span> fs = <span class="fn">require</span>(<span class="str">'fs'</span>);
+<span class="kw">const</span> oracledb = <span class="fn">require</span>(<span class="str">'oracledb'</span>);
+
+<span class="kw">async function</span> <span class="fn">testConnection</span>(conn) { ... }
+<span class="kw">async function</span> <span class="fn">listTables</span>(conn) { ... }
+<span class="kw">async function</span> <span class="fn">dump</span>(conn, options, outFilePath, onProgress) { ... }
+<span class="kw">async function</span> <span class="fn">restore</span>(conn, sqlFilePath, onProgress) { ... }
+<span class="kw">function</span> <span class="fn">parseTableNamesFromDump</span>(sqlFilePath) { ... }
+
+module.exports = {
+  type: <span class="str">'oracle'</span>,
+  testConnection, listTables, dump, restore, parseTableNamesFromDump,
+};</pre>
+
+  <div class="where">📁 步驟 2：<code>adapters/index.js</code> 註冊</div>
+  <pre><span class="kw">const</span> adapters = {
+  mysql:    <span class="fn">require</span>(<span class="str">'./mysql'</span>),
+  postgres: <span class="fn">require</span>(<span class="str">'./postgres'</span>),
+  mssql:    <span class="fn">require</span>(<span class="str">'./mssql'</span>),
+  sqlite:   <span class="fn">require</span>(<span class="str">'./sqlite'</span>),
+  <span class="add">oracle:   require('./oracle'),</span>
+};</pre>
+
+  <div class="where">📁 步驟 3：<code>public/index.html</code> 加卡片</div>
+  <pre>&lt;button class=<span class="str">"card"</span> data-type=<span class="str">"oracle"</span> data-port=<span class="str">"1521"</span>&gt;
+  &lt;div class=<span class="str">"card-title"</span>&gt;Oracle DB&lt;/div&gt;
+  &lt;div class=<span class="str">"card-sub"</span>&gt;純 oracledb driver&lt;/div&gt;
+&lt;/button&gt;</pre>
+
+  <div class="where">📁 步驟 4：安裝套件</div>
+  <pre>npm install oracledb</pre>
+
+  <div class="tip">✅ 完成後重啟 server，前端就會多一張 Oracle 卡。所有路由都會自動支援 oracle type 不用改。</div>
+</div>
+
+<h2>🟢 場景 6：匯出多加一個選項 (例：分批 INSERT 大小可調)</h2>
+<div class="scenario">
+  <div class="where">📁 步驟 1：<code>public/index.html</code></div>
+  <pre>&lt;div class=<span class="str">"form-row"</span>&gt;
+  &lt;label&gt;&lt;input type=<span class="str">"checkbox"</span> id=<span class="str">"exp-no-data"</span> /&gt; 只匯出結構&lt;/label&gt;
+  <span class="add">&lt;label&gt;批次大小 &lt;input type="number" id="exp-batch" value="500" /&gt;&lt;/label&gt;</span>
+&lt;/div&gt;</pre>
+
+  <div class="where">📁 步驟 2：<code>public/app.js</code> 第 108 行</div>
+  <pre><span class="kw">const</span> options = {
+  tables,
+  noData: $(<span class="str">'#exp-no-data'</span>).checked,
+  noSchema: $(<span class="str">'#exp-no-schema'</span>).checked,
+  <span class="add">batchSize: parseInt($('#exp-batch').value) || 500,</span>
+};</pre>
+
+  <div class="where">📁 步驟 3：<code>adapters/mysql.js</code>（與其他 adapter） 第 76 行</div>
+  <pre><span class="del">const MAX_BATCH = 500;</span>
+<span class="add">const MAX_BATCH = options.batchSize || 500;</span></pre>
+</div>
+
+<h2>🟢 場景 7：自動清理過期暫存檔</h2>
+<div class="scenario">
+  <div class="where">📁 <code>server.js</code> 在最末加排程</div>
+  <pre><span class="kw">const</span> os = <span class="fn">require</span>(<span class="str">'os'</span>);
+
+<span class="cm">// 每 1 小時清理超過 24 小時的 export 暫存</span>
+setInterval(() =&gt; {
+  <span class="kw">const</span> cutoff = Date.<span class="fn">now</span>() - 24 * 60 * 60 * 1000;
+  <span class="kw">for</span> (<span class="kw">const</span> entry <span class="kw">of</span> fs.<span class="fn">readdirSync</span>(TMP_DIR)) {
+    <span class="kw">const</span> p = path.<span class="fn">join</span>(TMP_DIR, entry);
+    <span class="kw">try</span> {
+      <span class="kw">if</span> (fs.<span class="fn">statSync</span>(p).mtimeMs &lt; cutoff) fs.<span class="fn">rmSync</span>(p, { recursive: <span class="kw">true</span>, force: <span class="kw">true</span> });
+    } <span class="kw">catch</span> {}
+  }
+}, 60 * 60 * 1000);</pre>
+</div>
+
+<h2>🟢 場景 8：加上 Basic Auth 防護</h2>
+<div class="scenario">
+  <p>最簡單的方式：用 <code>express-basic-auth</code> 套件。</p>
+  <pre>npm install express-basic-auth</pre>
+  <div class="where">📁 <code>server.js</code> 在路由之前加</div>
+  <pre><span class="kw">const</span> basicAuth = <span class="fn">require</span>(<span class="str">'express-basic-auth'</span>);
+app.<span class="fn">use</span>(basicAuth({
+  users: { <span class="str">'admin'</span>: <span class="str">'changeme'</span> },
+  challenge: <span class="kw">true</span>,
+}));</pre>
+  <div class="warn">⚠️ 一定要搭配 HTTPS，否則密碼會在網路上以 base64 明文傳輸。</div>
+</div>
+
+<h2>🟢 場景 9：在資料表清單顯示「實際筆數」而非估計值</h2>
+<div class="scenario">
+  <div class="where">📁 <code>adapters/mysql.js</code> 第 28 行 <code>listTables</code></div>
+  <p>目前用 <code>TABLE_ROWS</code> 是估計值。要拿準確值得另跑 COUNT(*)，但會很慢：</p>
+  <pre><span class="kw">async function</span> <span class="fn">listTables</span>(conn) {
+  <span class="kw">const</span> c = <span class="kw">await</span> mysqlPromise.<span class="fn">createConnection</span>(<span class="fn">buildConnConfig</span>(conn));
+  <span class="kw">try</span> {
+    <span class="kw">const</span> [rows] = <span class="kw">await</span> c.<span class="fn">query</span>(
+      <span class="str">'SELECT TABLE_NAME AS name FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME'</span>,
+      [conn.database]
+    );
+    <span class="add">// 對每個表跑 COUNT(*) -- 大表會非常慢</span>
+    <span class="add">for (const r of rows) {</span>
+      <span class="add">const [[{ n }]] = await c.query(`SELECT COUNT(*) AS n FROM \`${r.name}\``);</span>
+      <span class="add">r.rowEstimate = n;</span>
+    <span class="add">}</span>
+    <span class="kw">return</span> rows;
+  } <span class="kw">finally</span> { <span class="kw">await</span> c.<span class="fn">end</span>(); }
+}</pre>
+  <div class="warn">⚠️ 大型 DB 上跑 COUNT(*) 對每張表是高成本。建議只在使用者點「重新計算」按鈕才跑。</div>
+</div>
+
+<h2>🟢 場景 10：把 dump 加上 gzip 壓縮</h2>
+<div class="scenario">
+  <div class="where">📁 <code>adapters/mysql.js</code>（其他 adapter 同理）</div>
+  <p>把 <code>fs.createWriteStream</code> 串到 <code>zlib.createGzip()</code>：</p>
+  <pre><span class="kw">const</span> zlib = <span class="fn">require</span>(<span class="str">'zlib'</span>);
+
+<span class="cm">// 在 dump() 內：</span>
+<span class="del">const stream = fs.createWriteStream(outFilePath, { encoding: 'utf8' });</span>
+<span class="add">const gzip = zlib.createGzip();</span>
+<span class="add">const fileStream = fs.createWriteStream(outFilePath + '.gz');</span>
+<span class="add">gzip.pipe(fileStream);</span>
+<span class="add">const stream = gzip; // 後續寫到 stream 都會自動壓縮</span></pre>
+  <div class="tip">💡 同時要改 export.js 的 downloadUrl 副檔名與 Content-Type。</div>
+</div>
+
+<h2>📋 修改後檢核清單</h2>
+<ol>
+  <li>修改後存檔，在 <code>npm start</code> 視窗按 Ctrl+C 重新啟動</li>
+  <li>用瀏覽器無痕模式打開（避免快取）</li>
+  <li>F12 開 DevTools 看 Network 與 Console 有沒有錯誤</li>
+  <li>每改一個 adapter 要四種 DB 都測過（如果你有測試環境）</li>
+  <li>修改 UI 要在不同視窗寬度下測（建議 1280px、768px）</li>
+</ol>
+
+<h2>🗂️ 程式依賴圖</h2>
+<pre>server.js
+ ├── routes/connection.js  ─┐
+ ├── routes/export.js      ─┤
+ ├── routes/import.js      ─┼─→ adapters/index.js ─→ mysql.js / postgres.js / mssql.js / sqlite.js
+ └── routes/jobs.js         │                          └── 都會用到 _shared.js
+                            └─→ lib/jobs.js  (進度狀態)
+
+public/index.html ─→ public/app.js ─→ fetch API ─→ /api/...</pre>
+
+</main>
+</body>
+</html>

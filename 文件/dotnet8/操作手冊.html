@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>操作手冊 - DB Migrator (.NET 8 版)</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; margin: 0; background: #f5f6f8; color: #1f2937; line-height: 1.7; }
+  header { background: linear-gradient(135deg, #1e40af, #1e3a8a); color: #fff; padding: 24px 32px; }
+  header h1 { margin: 0; font-size: 22px; }
+  nav.topnav { background: #1e3a8a; padding: 10px 32px; }
+  nav.topnav a { color: #bfdbfe; text-decoration: none; margin-right: 18px; font-size: 14px; font-weight: 500; }
+  nav.topnav a:hover { color: #fff; text-decoration: underline; }
+  nav.topnav a.active { color: #fff; border-bottom: 2px solid #60a5fa; padding-bottom: 4px; }
+  main { max-width: 1000px; margin: 28px auto; padding: 0 24px 60px; }
+  h2 { color: #1e40af; border-bottom: 2px solid #dbeafe; padding-bottom: 6px; margin-top: 36px; }
+  h3 { color: #1e3a8a; margin-top: 28px; }
+  pre.cmd { background: #1f2937; color: #e5e7eb; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13px; }
+  code { background: #f3f4f6; padding: 1px 6px; border-radius: 3px; font-family: Consolas, monospace; font-size: 13px; color: #be123c; }
+  .step-block { background: #fff; border-radius: 8px; padding: 20px 24px; margin: 18px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .step-num { display: inline-block; background: #3b82f6; color: #fff; width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; font-weight: 700; margin-right: 8px; }
+  .info-box { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 12px 16px; margin: 12px 0; font-size: 14px; border-radius: 4px; }
+  .warn-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 12px 0; font-size: 14px; border-radius: 4px; }
+  .tip { background: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 10px 14px; margin: 12px 0; font-size: 13px; border-radius: 4px; }
+
+  /* ===== 模擬截圖樣式 ===== */
+  .screenshot { background: #f5f6f8; border: 1px solid #e5e7eb; border-radius: 10px; padding: 0; margin: 16px 0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .screenshot .browser-bar { background: #e5e7eb; padding: 8px 12px; display: flex; align-items: center; gap: 6px; }
+  .screenshot .browser-bar .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .screenshot .browser-bar .red { background: #ef4444; }
+  .screenshot .browser-bar .yellow { background: #f59e0b; }
+  .screenshot .browser-bar .green { background: #10b981; }
+  .screenshot .browser-bar .addr { background: #fff; flex: 1; padding: 4px 10px; border-radius: 4px; font-size: 12px; color: #4b5563; margin-left: 8px; font-family: Consolas, monospace; }
+  .app-body { background: #f5f6f8; padding: 0; }
+  .app-header { background: #1f2937; color: #fff; padding: 14px 22px; }
+  .app-header h2 { margin: 0; font-size: 18px; }
+  .app-main { padding: 18px; }
+  .ui-step { background: #fff; border-radius: 8px; padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .ui-step h3 { margin: 0 0 12px; font-size: 14px; color: #374151; }
+  .ui-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .ui-card { background: #fff; border: 2px solid #e5e7eb; border-radius: 6px; padding: 14px; cursor: pointer; text-align: left; }
+  .ui-card.selected { border-color: #3b82f6; background: #eff6ff; }
+  .ui-card .t { font-weight: 600; font-size: 13px; color: #111827; margin-bottom: 3px; }
+  .ui-card .s { font-size: 11px; color: #6b7280; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form-grid label { font-size: 12px; color: #4b5563; display: flex; flex-direction: column; }
+  .form-grid input { margin-top: 3px; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 3px; font-size: 13px; }
+  .btn { background: #3b82f6; color: #fff; border: 0; padding: 6px 14px; border-radius: 4px; font-size: 13px; cursor: pointer; display: inline-block; }
+  .status-ok { color: #059669; font-size: 13px; margin-left: 10px; }
+  .tag { display: inline-block; padding: 2px 8px; background: #eff6ff; color: #1d4ed8; border-radius: 4px; font-size: 11px; margin-left: 6px; }
+  .mode-switch { margin-top: 14px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+  .mode-btn { background: #e5e7eb; color: #374151; padding: 6px 14px; border: 0; border-radius: 4px; margin-right: 6px; font-size: 13px; }
+  .mode-btn.active { background: #3b82f6; color: #fff; }
+  .table-list { max-height: 140px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 4px; padding: 6px 10px; margin: 8px 0; }
+  .table-list label { display: block; font-size: 12px; padding: 2px 0; }
+  .log-box { background: #111827; color: #d1d5db; padding: 10px 12px; border-radius: 4px; font-size: 11px; font-family: Consolas, monospace; max-height: 140px; overflow-y: auto; margin-top: 10px; white-space: pre-wrap; }
+  .diff-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  .diff-table th, .diff-table td { padding: 5px 10px; font-size: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+  .diff-table th { background: #f9fafb; }
+  .exists-yes { color: #b45309; font-weight: 500; }
+  .exists-no { color: #059669; }
+  .caption { text-align: center; font-size: 13px; color: #6b7280; margin-top: 6px; font-style: italic; }
+  .ide-screenshot { background: #1e1e1e; color: #d4d4d4; padding: 14px; border-radius: 8px; font-family: Consolas, monospace; font-size: 12px; margin: 12px 0; }
+  .ide-screenshot .title { background: #2d2d30; color: #cccccc; padding: 6px 12px; margin: -14px -14px 10px; border-radius: 8px 8px 0 0; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📘 操作手冊 - DB Migrator (.NET 8 版)</h1>
+</header>
+<nav class="topnav">
+  <a href="../index.html">總覽</a>
+  <a href="index.html">本版首頁</a>
+  <a href="操作手冊.html" class="active">操作手冊</a>
+  <a href="function對照.html">Function 對照</a>
+  <a href="UI說明.html">UI 解析</a>
+  <a href="修改指南.html">修改指南</a>
+</nav>
+<main>
+
+<h2>🚀 第一次啟動</h2>
+
+<div class="step-block">
+  <h3><span class="step-num">1</span>確認 .NET 8 SDK 已安裝</h3>
+  <pre class="cmd">dotnet --list-sdks</pre>
+  <p>清單裡要有 <code>8.0.xxx</code>。沒有的話到 <a href="https://dotnet.microsoft.com/download">dotnet.microsoft.com</a> 下載 .NET 8 SDK。</p>
+</div>
+
+<div class="step-block">
+  <h3><span class="step-num">2</span>還原 NuGet 套件（第一次才需要）</h3>
+  <pre class="cmd">cd F:\匯出資料庫的bat\dotnet8
+dotnet restore</pre>
+  <p>會自動下載 MySqlConnector、Npgsql、SqlClient、Sqlite 等套件。</p>
+</div>
+
+<div class="step-block">
+  <h3><span class="step-num">3</span>啟動服務</h3>
+  <pre class="cmd">dotnet run</pre>
+  <p>看到下面類似訊息表示成功：</p>
+  <pre class="cmd">info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:3001
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.</pre>
+  <p>用瀏覽器打開 <strong>http://localhost:3001</strong> 即可開始使用。</p>
+  <div class="tip">💡 也可以用 Visual Studio 開 <code>DbMigrator.sln</code>，按 F5 啟動並自帶 debugger。</div>
+</div>
+
+<h2>🖥️ Visual Studio 操作示意（模擬畫面）</h2>
+<div class="ide-screenshot">
+  <div class="title">▼ Solution Explorer</div>
+  📁 Solution 'DbMigrator' (1 project)<br>
+  &nbsp;&nbsp;└── 📁 <span style="color:#4ec9b0;">DbMigrator.Web</span><br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── 📁 Adapters<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── 📄 IDatabaseAdapter.cs<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── 📄 MsSqlAdapter.cs<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── 📄 MySqlAdapter.cs<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── 📄 PostgresAdapter.cs<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── 📄 SqliteAdapter.cs<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── 📄 SqlHelpers.cs<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── 📁 Controllers<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── 📄 ConnectionController.cs<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── 📄 ExportController.cs<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── 📄 ImportController.cs<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── 📄 JobsController.cs<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── 📁 Models<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── 📄 ConnectionInfo.cs<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── 📁 Services<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── 📄 JobService.cs<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── 📁 wwwroot<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── 📄 index.html<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── 📄 app.js<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── 📄 style.css<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── 📄 <span style="color:#dcdcaa;">Program.cs</span><br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── 📄 appsettings.json<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── 📄 DbMigrator.Web.csproj
+</div>
+<div class="caption">▲ Visual Studio Solution Explorer 預期看到的專案結構</div>
+
+<h2>🖥️ 使用畫面導覽（模擬截圖）</h2>
+
+<div class="step-block">
+  <h3><span class="step-num">1</span>選擇資料庫類型</h3>
+  <p>進到 http://localhost:3001 後，畫面與 node-express 版完全相同（共用同一份前端）：</p>
+
+  <div class="screenshot">
+    <div class="browser-bar">
+      <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+      <div class="addr">🔒 localhost:3001</div>
+    </div>
+    <div class="app-body">
+      <div class="app-header"><h2>資料庫匯出 / 匯入</h2></div>
+      <div class="app-main">
+        <div class="ui-step">
+          <h3>1. 選擇資料庫類型</h3>
+          <div class="ui-cards">
+            <div class="ui-card">
+              <div class="t">MySQL / MariaDB</div>
+              <div class="s">純 mysql2 driver</div>
+            </div>
+            <div class="ui-card">
+              <div class="t">PostgreSQL</div>
+              <div class="s">純 pg driver</div>
+            </div>
+            <div class="ui-card selected">
+              <div class="t">SQL Server</div>
+              <div class="s">純 mssql driver</div>
+            </div>
+            <div class="ui-card">
+              <div class="t">SQLite</div>
+              <div class="s">本機檔案</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">▲ 第 1 步：本例點選 SQL Server</div>
+</div>
+
+<div class="step-block">
+  <h3><span class="step-num">2</span>填連線資訊並測試</h3>
+
+  <div class="screenshot">
+    <div class="browser-bar">
+      <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+      <div class="addr">🔒 localhost:3001</div>
+    </div>
+    <div class="app-body">
+      <div class="app-header"><h2>資料庫匯出 / 匯入</h2></div>
+      <div class="app-main">
+        <div class="ui-step">
+          <h3>2. 連線設定 <span class="tag">mssql</span></h3>
+          <div class="form-grid">
+            <label>Host <input value="192.168.1.10" /></label>
+            <label>Port <input value="1433" /></label>
+            <label>Database <input value="Northwind" /></label>
+            <label>User <input value="sa" /></label>
+            <label style="grid-column: 1 / -1;">Password <input type="password" value="••••••••••" /></label>
+          </div>
+          <div style="margin-top: 12px;">
+            <button class="btn">連線測試</button>
+            <span class="status-ok">✓ 成功，Microsoft SQL Server 2022</span>
+          </div>
+          <div class="mode-switch">
+            <button class="mode-btn active">匯出</button>
+            <button class="mode-btn">匯入</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">▲ 第 2 步：SQL Server 連線測試成功</div>
+
+  <div class="warn-box">
+    <strong>SQL Server 特殊注意：</strong>
+    <ul style="margin: 4px 0;">
+      <li>本地常用 instance 名稱（<code>SQLEXPRESS</code>）— 目前 Host 欄位<strong>不支援</strong> <code>localhost\SQLEXPRESS</code> 寫法。<br>
+        要連 instance 請在 SQL Server Configuration Manager 啟用 TCP/IP 並指定 port</li>
+      <li>連線字串內已預設 <code>TrustServerCertificate=true</code>，方便開發環境使用自簽憑證</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step-block">
+  <h3><span class="step-num">3a</span>匯出資料庫</h3>
+  <p>連線通過後，<code>schema.table</code> 格式的清單會自動列出（例：<code>dbo.Customers</code>）。</p>
+
+  <div class="screenshot">
+    <div class="browser-bar">
+      <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+      <div class="addr">🔒 localhost:3001</div>
+    </div>
+    <div class="app-body">
+      <div class="app-header"><h2>資料庫匯出 / 匯入</h2></div>
+      <div class="app-main">
+        <div class="ui-step">
+          <h3>3. 匯出</h3>
+          <div style="font-size: 13px;">
+            <label style="margin-right: 16px;"><input type="radio" /> 全部匯出</label>
+            <label><input type="radio" checked /> 選擇資料表</label>
+          </div>
+          <div class="table-list" style="margin-top: 10px;">
+            <label><input type="checkbox" checked /> dbo.Customers <span style="color: #9ca3af;">(~91)</span></label>
+            <label><input type="checkbox" checked /> dbo.Orders <span style="color: #9ca3af;">(~830)</span></label>
+            <label><input type="checkbox" /> dbo.Employees <span style="color: #9ca3af;">(~9)</span></label>
+            <label><input type="checkbox" checked /> dbo.Products <span style="color: #9ca3af;">(~77)</span></label>
+          </div>
+          <div style="margin-top: 12px;">
+            <button class="btn">開始匯出</button>
+          </div>
+          <div class="log-box">Dumping 3 table(s)
+&gt; dbo.Customers
+  dbo.Customers: 91 rows done
+&gt; dbo.Orders
+  dbo.Orders: 830 rows done
+&gt; dbo.Products
+  dbo.Products: 77 rows done
+Done</div>
+          <div style="margin-top: 10px;">
+            <a href="#" style="color: #3b82f6; font-size: 13px;">📥 下載 SQL 檔</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">▲ 第 3a 步：只選想要的 table 匯出</div>
+
+  <div class="tip">
+    💡 <strong>.NET 8 版的差異：</strong>匯出過程是 <code>Task.Run</code> 在背景執行，不會 block API 回應。<br>
+    暫存檔放在 <code>bin\Debug\net8.0\tmp\{jobId}\</code>（用 Debug build 時）。
+  </div>
+</div>
+
+<div class="step-block">
+  <h3><span class="step-num">3b</span>匯入資料庫</h3>
+
+  <div class="screenshot">
+    <div class="browser-bar">
+      <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+      <div class="addr">🔒 localhost:3001</div>
+    </div>
+    <div class="app-body">
+      <div class="app-header"><h2>資料庫匯出 / 匯入</h2></div>
+      <div class="app-main">
+        <div class="ui-step">
+          <h3>3. 匯入</h3>
+          <div style="font-size: 13px;">
+            <label>選擇 SQL 檔 <input type="file" /></label>
+            <button class="btn">檢查內容</button>
+          </div>
+          <div style="margin-top: 14px;">
+            <h4 style="font-size: 13px; margin: 0 0 6px;">資料表對照</h4>
+            <table class="diff-table">
+              <thead><tr><th></th><th>資料表</th><th>目標 DB 狀態</th></tr></thead>
+              <tbody>
+                <tr><td><input type="checkbox" checked /></td><td>dbo.Customers</td><td class="exists-yes">已存在（將覆寫）</td></tr>
+                <tr><td><input type="checkbox" checked /></td><td>dbo.Audit_Log</td><td class="exists-no">不存在（新建）</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top: 12px;">
+            <button class="btn">執行匯入</button>
+          </div>
+          <div class="log-box">Executing 87 batches...
+  50/87
+Restore complete (87 batches)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">▲ 第 3b 步：SQL Server 用 GO 為單位分批，所以 log 顯示 batches</div>
+</div>
+
+<h2>🛑 停止服務</h2>
+<p>在跑 <code>dotnet run</code> 的視窗按 <strong>Ctrl + C</strong> 即可。<br>
+若用 Visual Studio 啟動，點工具列「停止」按鈕（紅色方框）。</p>
+
+<h2>📦 Production 發佈</h2>
+<div class="tip">
+  <p>當你要部署到正式環境，建議用 self-contained publish：</p>
+  <pre class="cmd">dotnet publish -c Release -r win-x64 --self-contained true -o publish</pre>
+  <p>產生的 <code>publish/</code> 資料夾包含 .NET runtime，可直接複製到目標機器執行 <code>DbMigrator.Web.exe</code>，不需要安裝 .NET。</p>
+</div>
+
+<h2>🆘 疑難排解</h2>
+<table style="background: #fff; width: 100%; border-collapse: collapse;">
+  <tr><th style="background:#dbeafe; padding:8px 12px; text-align:left;">症狀</th><th style="background:#dbeafe; padding:8px 12px; text-align:left;">可能原因 / 解法</th></tr>
+  <tr><td style="padding:8px 12px; border-bottom:1px solid #e5e7eb;"><code>The SDK 'Microsoft.NET.Sdk.Web' specified could not be found</code></td><td style="padding:8px 12px; border-bottom:1px solid #e5e7eb;">沒裝 .NET 8 SDK（只裝了 runtime）</td></tr>
+  <tr><td style="padding:8px 12px; border-bottom:1px solid #e5e7eb;">port 3001 已被佔用</td><td style="padding:8px 12px; border-bottom:1px solid #e5e7eb;">改 <code>appsettings.json</code> 的 <code>Kestrel.Endpoints.Http.Url</code></td></tr>
+  <tr><td style="padding:8px 12px; border-bottom:1px solid #e5e7eb;">前端打開但 API 都失敗</td><td style="padding:8px 12px; border-bottom:1px solid #e5e7eb;">F12 看 Network 是否真的打到 3001；可能瀏覽器快取了 3000</td></tr>
+  <tr><td style="padding:8px 12px;">SQL Server 連線報 SSL 錯誤</td><td style="padding:8px 12px;">已預設 trustServerCertificate=true，若仍失敗確認 SQL Server 有開 TCP/IP</td></tr>
+</table>
+
+</main>
+</body>
+</html>

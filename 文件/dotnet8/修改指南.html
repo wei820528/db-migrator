@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>修改指南 - DB Migrator (.NET 8 版)</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; margin: 0; background: #f5f6f8; color: #1f2937; line-height: 1.7; }
+  header { background: linear-gradient(135deg, #1e40af, #1e3a8a); color: #fff; padding: 24px 32px; }
+  header h1 { margin: 0; font-size: 22px; }
+  nav.topnav { background: #1e3a8a; padding: 10px 32px; }
+  nav.topnav a { color: #bfdbfe; text-decoration: none; margin-right: 18px; font-size: 14px; font-weight: 500; }
+  nav.topnav a:hover { color: #fff; text-decoration: underline; }
+  nav.topnav a.active { color: #fff; border-bottom: 2px solid #60a5fa; padding-bottom: 4px; }
+  main { max-width: 1000px; margin: 28px auto; padding: 0 24px 60px; }
+  h2 { color: #1e40af; border-bottom: 2px solid #dbeafe; padding-bottom: 6px; margin-top: 36px; }
+  h3 { color: #1e3a8a; margin-top: 24px; }
+  code { background: #f3f4f6; padding: 1px 6px; border-radius: 3px; font-family: Consolas, monospace; font-size: 13px; color: #be123c; }
+  pre { background: #1f2937; color: #e5e7eb; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre .kw { color: #c4b5fd; }
+  pre .str { color: #86efac; }
+  pre .cm { color: #9ca3af; font-style: italic; }
+  pre .fn { color: #fbbf24; }
+  pre .ty { color: #93c5fd; }
+  pre .add { background: rgba(16, 185, 129, 0.2); display: inline-block; width: 100%; }
+  pre .del { background: rgba(239, 68, 68, 0.2); display: inline-block; width: 100%; text-decoration: line-through; }
+  .scenario { background: #fff; border-radius: 8px; padding: 20px 24px; margin: 20px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 5px solid #3b82f6; }
+  .scenario h3 { margin-top: 0; color: #1e3a8a; }
+  .scenario .where { background: #dbeafe; padding: 6px 12px; border-radius: 4px; font-size: 13px; margin: 8px 0; display: inline-block; }
+  .scenario ol { margin: 8px 0; padding-left: 24px; }
+  .scenario ol li { margin: 6px 0; }
+  .tip { background: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 10px 14px; margin: 12px 0; font-size: 13px; border-radius: 4px; }
+  .warn { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 14px; margin: 12px 0; font-size: 13px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>✏️ 修改指南 - DB Migrator (.NET 8 版)</h1>
+</header>
+<nav class="topnav">
+  <a href="../index.html">總覽</a>
+  <a href="index.html">本版首頁</a>
+  <a href="操作手冊.html">操作手冊</a>
+  <a href="function對照.html">Function 對照</a>
+  <a href="UI說明.html">UI 解析</a>
+  <a href="修改指南.html" class="active">修改指南</a>
+</nav>
+<main>
+
+<p style="background:#fef3c7; padding:12px 16px; border-radius:6px; border-left:4px solid #f59e0b;">
+這份指南列出常見的修改情境，每個情境告訴你 <strong>「動哪個檔」、「動哪一段」、「怎麼動」</strong>。所有路徑相對於 <code>F:\匯出資料庫的bat\dotnet8\</code>。
+</p>
+
+<h2>🔵 場景 1：換掉預設 port（不再用 3001）</h2>
+<div class="scenario">
+  <div class="where">📁 <code>appsettings.json</code></div>
+  <pre>{
+  "Kestrel": {
+    "Endpoints": {
+      "Http": { "Url": <span class="del">"http://localhost:3001"</span> <span class="add">"http://localhost:8081"</span> }
+    }
+  }
+}</pre>
+  <div class="tip">💡 也可以指定 <code>http://0.0.0.0:8081</code> 讓區網其他電腦也能連，但記得防火牆放行。</div>
+</div>
+
+<h2>🔵 場景 2：放大上傳檔大小限制（目前 1GB）</h2>
+<div class="scenario">
+  <div class="where">📁 <code>Controllers/ImportController.cs</code> 第 31 行</div>
+  <pre><span class="kw">[HttpPost("inspect")]</span>
+<span class="del">[RequestSizeLimit(1024L * 1024 * 1024)]      // 1GB</span>
+<span class="add">[RequestSizeLimit(5L * 1024 * 1024 * 1024)]  // 5GB</span>
+public async Task&lt;<span class="ty">IActionResult</span>&gt; <span class="fn">Inspect</span>(...)</pre>
+  <div class="warn">⚠️ Kestrel 預設也有 30MB 限制；要在 <code>Program.cs</code> 加：
+    <pre>builder.WebHost.<span class="fn">ConfigureKestrel</span>(o =&gt; o.Limits.MaxRequestBodySize = 5L * 1024 * 1024 * 1024);</pre>
+  </div>
+</div>
+
+<h2>🔵 場景 3：改畫面色系（紫色主題）</h2>
+<div class="scenario">
+  <div class="where">📁 <code>wwwroot/style.css</code></div>
+  <pre><span class="cm">// header 背景</span>
+header { background: <span class="del">#1f2937</span> <span class="add">#5b21b6</span>; }
+
+<span class="cm">// 主按鈕</span>
+button { background: <span class="del">#3b82f6</span> <span class="add">#7c3aed</span>; }
+button:hover { background: <span class="del">#2563eb</span> <span class="add">#6d28d9</span>; }
+
+<span class="cm">// 卡片邊框</span>
+.card:hover { border-color: <span class="del">#3b82f6</span> <span class="add">#7c3aed</span>; }
+.card.selected { border-color: <span class="del">#3b82f6</span> <span class="add">#7c3aed</span>; background: <span class="del">#eff6ff</span> <span class="add">#f5f3ff</span>; }</pre>
+</div>
+
+<h2>🔵 場景 4：加第 5 種資料庫（例如 Oracle）</h2>
+<div class="scenario">
+  <h3>動 4 個地方</h3>
+
+  <div class="where">📁 步驟 1：安裝 NuGet 套件</div>
+  <pre>cd F:\匯出資料庫的bat\dotnet8
+dotnet add package Oracle.ManagedDataAccess.Core</pre>
+
+  <div class="where">📁 步驟 2：新建 <code>Adapters/OracleAdapter.cs</code></div>
+  <pre><span class="kw">using</span> Oracle.ManagedDataAccess.Client;
+<span class="kw">using</span> DbMigrator.Web.Models;
+
+<span class="kw">namespace</span> DbMigrator.Web.Adapters;
+
+<span class="kw">public class</span> <span class="ty">OracleAdapter</span> : <span class="ty">IDatabaseAdapter</span>
+{
+    <span class="kw">public string</span> Type =&gt; <span class="str">"oracle"</span>;
+
+    <span class="kw">public async</span> Task&lt;(<span class="kw">bool</span>, <span class="kw">string</span>, <span class="kw">string</span>?)&gt; <span class="fn">TestConnectionAsync</span>(DbConnectionInfo conn) { ... }
+    <span class="kw">public async</span> Task&lt;List&lt;<span class="ty">TableInfo</span>&gt;&gt; <span class="fn">ListTablesAsync</span>(DbConnectionInfo conn) { ... }
+    <span class="kw">public async</span> Task <span class="fn">DumpAsync</span>(...) { ... }
+    <span class="kw">public async</span> Task <span class="fn">RestoreAsync</span>(...) { ... }
+    <span class="kw">public</span> List&lt;<span class="kw">string</span>&gt; <span class="fn">ParseTableNamesFromDump</span>(<span class="kw">string</span> path) { ... }
+}</pre>
+
+  <div class="where">📁 步驟 3：<code>Adapters/IDatabaseAdapter.cs</code> 註冊</div>
+  <pre>_map = <span class="kw">new</span>(StringComparer.OrdinalIgnoreCase)
+{
+    [<span class="str">"mysql"</span>]    = <span class="kw">new</span> <span class="ty">MySqlAdapter</span>(),
+    [<span class="str">"postgres"</span>] = <span class="kw">new</span> <span class="ty">PostgresAdapter</span>(),
+    [<span class="str">"mssql"</span>]    = <span class="kw">new</span> <span class="ty">MsSqlAdapter</span>(),
+    [<span class="str">"sqlite"</span>]   = <span class="kw">new</span> <span class="ty">SqliteAdapter</span>(),
+    <span class="add">["oracle"]   = new OracleAdapter(),</span>
+};</pre>
+
+  <div class="where">📁 步驟 4：<code>wwwroot/index.html</code> 加卡片</div>
+  <pre>&lt;button class=<span class="str">"card"</span> data-type=<span class="str">"oracle"</span> data-port=<span class="str">"1521"</span>&gt;
+  &lt;div class=<span class="str">"card-title"</span>&gt;Oracle DB&lt;/div&gt;
+  &lt;div class=<span class="str">"card-sub"</span>&gt;純 oracledb driver&lt;/div&gt;
+&lt;/button&gt;</pre>
+
+  <div class="tip">✅ 重新 <code>dotnet run</code>，oracle 卡片就會出現在 UI。所有 controller 都會自動支援，不用改。</div>
+</div>
+
+<h2>🔵 場景 5：把 job 改用 SQLite 持久化（不再用記憶體）</h2>
+<div class="scenario">
+  <div class="where">📁 重寫 <code>Services/JobService.cs</code></div>
+  <p>把 <code>ConcurrentDictionary</code> 換成 SQLite 表，重啟 service 後 job 狀態還在。</p>
+  <pre><span class="kw">public class</span> <span class="ty">JobService</span>
+{
+    <span class="kw">private readonly string</span> _connStr = <span class="str">"Data Source=jobs.db"</span>;
+
+    <span class="kw">public</span> <span class="fn">JobService</span>()
+    {
+        <span class="kw">using var</span> c = <span class="kw">new</span> <span class="ty">SqliteConnection</span>(_connStr);
+        c.<span class="fn">Open</span>();
+        <span class="kw">using var</span> cmd = <span class="kw">new</span> <span class="ty">SqliteCommand</span>(
+          <span class="str">@"CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, kind TEXT, status TEXT, data TEXT)"</span>, c);
+        cmd.<span class="fn">ExecuteNonQuery</span>();
+    }
+
+    <span class="kw">public</span> <span class="ty">Job</span> <span class="fn">Create</span>(<span class="kw">string</span> kind) { <span class="cm">// INSERT into jobs ...</span> }
+    <span class="kw">public</span> <span class="ty">Job</span>? <span class="fn">Get</span>(<span class="kw">string</span> id)   { <span class="cm">// SELECT * FROM jobs WHERE id=@id</span> }
+    ...
+}</pre>
+  <div class="warn">⚠️ 同時需要 lock 或 transaction 避免並發寫衝突。</div>
+</div>
+
+<h2>🔵 場景 6：自動清理過期暫存檔（用 BackgroundService）</h2>
+<div class="scenario">
+  <div class="where">📁 新建 <code>Services/CleanupService.cs</code></div>
+  <pre><span class="kw">public class</span> <span class="ty">CleanupService</span> : <span class="ty">BackgroundService</span>
+{
+    <span class="kw">protected override async</span> Task <span class="fn">ExecuteAsync</span>(CancellationToken stoppingToken)
+    {
+        <span class="kw">var</span> tmp = Path.<span class="fn">Combine</span>(AppContext.BaseDirectory, <span class="str">"tmp"</span>);
+        <span class="kw">while</span> (!stoppingToken.IsCancellationRequested)
+        {
+            <span class="kw">var</span> cutoff = DateTime.<span class="fn">UtcNow</span>.<span class="fn">AddHours</span>(-<span class="str">24</span>);
+            <span class="kw">foreach</span> (<span class="kw">var</span> dir <span class="kw">in</span> Directory.<span class="fn">GetDirectories</span>(tmp))
+            {
+                <span class="kw">try</span> {
+                    <span class="kw">if</span> (Directory.<span class="fn">GetCreationTimeUtc</span>(dir) &lt; cutoff)
+                        Directory.<span class="fn">Delete</span>(dir, <span class="kw">true</span>);
+                } <span class="kw">catch</span> { }
+            }
+            <span class="kw">await</span> Task.<span class="fn">Delay</span>(TimeSpan.<span class="fn">FromHours</span>(<span class="str">1</span>), stoppingToken);
+        }
+    }
+}</pre>
+
+  <div class="where">📁 <code>Program.cs</code> 註冊</div>
+  <pre>builder.Services.<span class="fn">AddHostedService</span>&lt;<span class="ty">CleanupService</span>&gt;();</pre>
+</div>
+
+<h2>🔵 場景 7：加 Basic Authentication</h2>
+<div class="scenario">
+  <p>用第三方套件 <code>idunno.Authentication.Basic</code>：</p>
+  <pre>dotnet add package idunno.Authentication.Basic</pre>
+
+  <div class="where">📁 <code>Program.cs</code> 加入</div>
+  <pre>builder.Services.<span class="fn">AddAuthentication</span>(<span class="str">"Basic"</span>)
+    .<span class="fn">AddBasic</span>(o =&gt;
+    {
+        o.Events = <span class="kw">new</span> <span class="ty">BasicAuthenticationEvents</span>
+        {
+            OnValidateCredentials = ctx =&gt;
+            {
+                <span class="kw">if</span> (ctx.Username == <span class="str">"admin"</span> &amp;&amp; ctx.Password == <span class="str">"changeme"</span>)
+                    ctx.<span class="fn">Success</span>();
+                <span class="kw">return</span> Task.CompletedTask;
+            }
+        };
+    });
+
+<span class="cm">// 在 app.MapControllers() 之前</span>
+app.<span class="fn">UseAuthentication</span>();
+app.<span class="fn">UseAuthorization</span>();</pre>
+
+  <p>並在每個 Controller class 上加 <code>[Authorize]</code>：</p>
+  <pre><span class="kw">[Authorize]</span>
+<span class="kw">[ApiController]</span>
+<span class="kw">[Route("api/export")]</span>
+<span class="kw">public class</span> <span class="ty">ExportController</span> : ControllerBase { ... }</pre>
+  <div class="warn">⚠️ Basic Auth 一定要搭配 HTTPS！</div>
+</div>
+
+<h2>🔵 場景 8：把進度改成 Server-Sent Events（取代 polling）</h2>
+<div class="scenario">
+  <div class="where">📁 新增 <code>Controllers/JobsController.cs</code> 多一個 endpoint</div>
+  <pre><span class="kw">[HttpGet(<span class="str">"{id}/stream"</span>)]</span>
+<span class="kw">public async</span> Task <span class="fn">Stream</span>(<span class="kw">string</span> id, CancellationToken ct)
+{
+    Response.Headers.<span class="fn">Add</span>(<span class="str">"Content-Type"</span>, <span class="str">"text/event-stream"</span>);
+    <span class="kw">int</span> lastSent = <span class="str">0</span>;
+    <span class="kw">while</span> (!ct.IsCancellationRequested)
+    {
+        <span class="kw">var</span> j = _jobs.<span class="fn">Get</span>(id);
+        <span class="kw">if</span> (j == <span class="kw">null</span>) <span class="kw">break</span>;
+        <span class="kw">for</span> (<span class="kw">int</span> i = lastSent; i &lt; j.Progress.Count; i++)
+            <span class="kw">await</span> Response.<span class="fn">WriteAsync</span>(<span class="str">$"data: {j.Progress[i].Line}\n\n"</span>, ct);
+        lastSent = j.Progress.Count;
+        <span class="kw">if</span> (j.Status == <span class="str">"done"</span> || j.Status == <span class="str">"error"</span>) <span class="kw">break</span>;
+        <span class="kw">await</span> Task.<span class="fn">Delay</span>(<span class="str">300</span>, ct);
+    }
+}</pre>
+
+  <div class="where">📁 <code>wwwroot/app.js</code> 用 EventSource 取代 fetch</div>
+  <pre><span class="kw">const</span> es = <span class="kw">new</span> EventSource(<span class="str">`/api/jobs/${id}/stream`</span>);
+es.onmessage = (e) =&gt; {
+  $(<span class="str">'#exp-log'</span>).textContent += <span class="str">'\n'</span> + e.data;
+};</pre>
+</div>
+
+<h2>🔵 場景 9：在資料表清單顯示實際筆數（覆蓋估計值）</h2>
+<div class="scenario">
+  <div class="where">📁 <code>Adapters/MySqlAdapter.cs</code> 第 42 行 <code>ListTablesAsync</code></div>
+  <pre><span class="kw">public async</span> Task&lt;List&lt;<span class="ty">TableInfo</span>&gt;&gt; <span class="fn">ListTablesAsync</span>(DbConnectionInfo conn)
+{
+    <span class="kw">var</span> list = <span class="kw">new</span> List&lt;<span class="ty">TableInfo</span>&gt;();
+    <span class="kw">await using var</span> c = <span class="kw">new</span> <span class="ty">MySqlConnection</span>(<span class="fn">BuildConnString</span>(conn));
+    <span class="kw">await</span> c.<span class="fn">OpenAsync</span>();
+    <span class="kw">await using var</span> cmd = <span class="kw">new</span> <span class="ty">MySqlCommand</span>(
+      <span class="str">"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = @db"</span>, c);
+    cmd.Parameters.<span class="fn">AddWithValue</span>(<span class="str">"@db"</span>, conn.Database);
+    <span class="kw">var</span> names = <span class="kw">new</span> List&lt;<span class="kw">string</span>&gt;();
+    <span class="kw">await using</span> (<span class="kw">var</span> rd = <span class="kw">await</span> cmd.<span class="fn">ExecuteReaderAsync</span>())
+        <span class="kw">while</span> (<span class="kw">await</span> rd.<span class="fn">ReadAsync</span>()) names.<span class="fn">Add</span>(rd.<span class="fn">GetString</span>(<span class="str">0</span>));
+
+    <span class="add">// 對每張表跑 COUNT(*)（大表會慢，慎用）</span>
+    <span class="add">foreach (var n in names)</span>
+    <span class="add">{</span>
+    <span class="add">    await using var cnt = new MySqlCommand($"SELECT COUNT(*) FROM `{n}`", c);</span>
+    <span class="add">    long total = Convert.ToInt64(await cnt.ExecuteScalarAsync());</span>
+    <span class="add">    list.Add(new TableInfo { Name = n, RowEstimate = total });</span>
+    <span class="add">}</span>
+    <span class="kw">return</span> list;
+}</pre>
+</div>
+
+<h2>🔵 場景 10：發佈成單一執行檔（給沒裝 .NET 的機器跑）</h2>
+<div class="scenario">
+  <pre>dotnet publish -c Release -r win-x64 --self-contained true ^
+   -p:PublishSingleFile=true ^
+   -p:IncludeNativeLibrariesForSelfExtract=true ^
+   -o C:\Deploy\dbmigrator</pre>
+  <p>產生的 <code>C:\Deploy\dbmigrator\DbMigrator.Web.exe</code> 可以直接拷到任何 Windows 機器（不用裝 .NET），雙擊執行即可。</p>
+  <div class="warn">⚠️ wwwroot 與 appsettings.json 會一併輸出到同個資料夾，部署時要整個 publish 目錄一起搬。</div>
+</div>
+
+<h2>📋 修改後檢核清單</h2>
+<ol>
+  <li>修改 C# code 後 Visual Studio 會自動重 build；用 CLI 跑就要重新 <code>dotnet run</code></li>
+  <li>修改 <code>wwwroot/</code> 內 HTML/JS/CSS <strong>不用重啟</strong>，瀏覽器 Ctrl+F5 強制重新整理即可</li>
+  <li>F12 開 DevTools 看 Network → 看 API request/response 對不對</li>
+  <li>VS 用 Debugger 可以在 Controller 與 Adapter 內下中斷點</li>
+  <li>檢查 <code>tmp/</code> 內檔案是否有殘留（特別是改完後）</li>
+</ol>
+
+<h2>🗂️ 程式依賴圖</h2>
+<pre>Program.cs
+ ├── DI: JobService (singleton)
+ ├── DI: AdapterRegistry (singleton)
+ │   └── 內含 4 個 adapter 實例
+ └── Controllers:
+     ├── ConnectionController  ─┐
+     ├── ExportController       ─┼─→ AdapterRegistry.Get(type) ─→ IDatabaseAdapter
+     ├── ImportController       ─┘                              └─ 各 adapter 用 SqlHelpers
+     └── JobsController         ──→ JobService
+
+wwwroot/index.html ─→ wwwroot/app.js ─→ fetch ─→ /api/...</pre>
+
+</main>
+</body>
+</html>

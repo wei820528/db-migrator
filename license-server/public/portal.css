@@ -1,0 +1,52 @@
+/* Portal-specific overrides on top of admin.css */
+
+.portal-main { max-width: 980px; margin: 24px auto; padding: 0 24px; }
+
+.hero-card {
+  background: linear-gradient(135deg, #c47a2d, #9d5d1e);
+  color: white;
+  border-radius: 14px;
+  padding: 32px;
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 8px 24px rgba(196,122,45,0.3);
+}
+.hero-card .muted { color: rgba(255,255,255,0.85); font-size: 13px; }
+.hero-card h2 { margin: 4px 0 6px; font-size: 28px; text-transform: capitalize; }
+.hero-card #hero-status { font-size: 14px; }
+.hero-card .hero-days { text-align: center; }
+.hero-card .hero-days #hero-days-num { font-size: 48px; font-weight: 700; line-height: 1; }
+
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 12px; }
+.plan-card {
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 18px;
+  background: white;
+  display: flex; flex-direction: column;
+}
+.plan-card.current { border-color: #c47a2d; background: #fef2e2; }
+.plan-card h3 { margin: 0 0 6px; text-transform: capitalize; }
+.plan-card .price { color: #6b7280; font-size: 12px; margin-bottom: 10px; }
+.plan-card ul { padding-left: 18px; margin: 0 0 14px; flex: 1; font-size: 13px; }
+.plan-card li { margin: 3px 0; color: #4b5563; }
+.plan-card .upgrade-btn {
+  width: 100%; padding: 8px; background: #c47a2d; color: white;
+  border: 0; border-radius: 6px; cursor: pointer; font-weight: 600;
+}
+.plan-card .upgrade-btn:hover { background: #9d5d1e; }
+.plan-card .upgrade-btn:disabled { background: #d1d5db; cursor: not-allowed; }
+.plan-card.current .upgrade-btn { background: #9ca3af; cursor: default; }
+
+#sessions-table .current-row td { background: #fef2e2 !important; }
+#sessions-table .badge.this-device { background: #d1fae5; color: #065f46; }
+
+#pw-form label { display: block; margin: 10px 0; font-size: 13px; color: #4b5563; }
+#pw-form input { display: block; width: 100%; max-width: 320px; margin-top: 4px;
+                 padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; }
+#pw-form .btn-primary { margin-top: 8px; }
+#pw-msg { font-size: 12px; min-height: 16px; margin-top: 8px; }
+#pw-msg.ok { color: #059669; }
+#pw-msg.err { color: #dc2626; }

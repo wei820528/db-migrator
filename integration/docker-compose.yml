@@ -1,0 +1,67 @@
+# Integration test fixture: spin up every DB type we support, expose it on a
+# fixed host port, and let `run.js` exercise the real adapter dump/restore.
+#
+# Usage from this folder:
+#   docker compose up -d
+#   node run.js          # or: npm run integration
+#   docker compose down -v
+
+name: dbmigrator-integration
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: dbmigrator
+      MYSQL_DATABASE: testdb
+    ports: ["33306:3306"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pdbmigrator"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: dbmigrator
+      POSTGRES_DB: testdb
+    ports: ["55432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d testdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "DbMigrator!1"   # MSSQL: ≥8 chars + complexity required
+      MSSQL_PID: Developer
+    ports: ["11433:1433"]
+    healthcheck:
+      # sqlcmd ships in the image at /opt/mssql-tools18/bin/
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'DbMigrator!1' -No -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  mongo:
+    image: mongo:7
+    ports: ["27017:27017"]
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'db.runCommand({ping:1}).ok' | mongosh --quiet | grep -q 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30

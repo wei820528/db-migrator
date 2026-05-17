@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>優化擴充建議的計畫 — DB Migrator</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<script src="docs-nav.js"></script>
+<div class="hero">
+  <h1>🚀 優化擴充建議</h1>
+  <p>分三類：A 效能 / B 程式碼健康 / C 新功能。每項標 P0~P3、難度、效益。</p>
+  <a class="back" href="index.html">← 文件首頁</a>
+</div>
+<main>
+
+<div class="card">
+  <h2>📑 目錄</h2>
+  <table>
+    <tr><th>編號</th><th>類別</th><th>項目</th><th>P</th><th>難度</th><th>效益</th></tr>
+    <tr><td>A-01</td><td>效能</td><td><a href="#a-01">Storage 並行下載 / 上傳</a></td><td>P1</td><td>★★</td><td>💎💎💎</td></tr>
+    <tr><td>A-02</td><td>效能</td><td><a href="#a-02">Dump 寫盤 buffer 加大 / 壓縮</a></td><td>P2</td><td>★</td><td>💎💎</td></tr>
+    <tr><td>A-03</td><td>效能</td><td><a href="#a-03">SSE / WebSocket 進度推送</a></td><td>P2</td><td>★★</td><td>💎💎</td></tr>
+    <tr><td>A-04</td><td>效能</td><td><a href="#a-04">License heartbeat 改 SSE long-poll</a></td><td>P3</td><td>★★</td><td>💎</td></tr>
+    <tr><td>B-01</td><td>健康</td><td><a href="#b-01">加入單元 / 整合測試</a></td><td>P0</td><td>★★★</td><td>💎💎💎</td></tr>
+    <tr><td>B-02</td><td>健康</td><td><a href="#b-02">CI 加 lint + 自動測試</a></td><td>P1</td><td>★★</td><td>💎💎💎</td></tr>
+    <tr><td>B-03</td><td>健康</td><td><a href="#b-03">structured logging（pino / Serilog）</a></td><td>P1</td><td>★</td><td>💎💎</td></tr>
+    <tr><td>B-04</td><td>健康</td><td><a href="#b-04">Audit log 另開資料表</a></td><td>P2</td><td>★</td><td>💎</td></tr>
+    <tr><td>B-05</td><td>健康</td><td><a href="#b-05">Plugin 沙箱（VM 隔離）</a></td><td>P3</td><td>★★★★</td><td>💎💎</td></tr>
+    <tr><td>C-01</td><td>新功能</td><td><a href="#c-01">部分 table 多選匯入（真實做篩選）</a></td><td>P0</td><td>★★</td><td>💎💎💎</td></tr>
+    <tr><td>C-02</td><td>新功能</td><td><a href="#c-02">DDL 完整化（FK / index / trigger）</a></td><td>P1</td><td>★★★</td><td>💎💎💎 <small>(全 4 種 DB 完成)</small></td></tr>
+    <tr><td>C-03</td><td>新功能</td><td><a href="#c-03">Schema diff 工具</a></td><td>P2</td><td>★★★</td><td>💎💎💎</td></tr>
+    <tr><td>C-04</td><td>新功能</td><td><a href="#c-04">綠界 / TapPay 支付（台灣付費）</a></td><td>P1</td><td>★★</td><td>💎💎</td></tr>
+    <tr><td>C-05</td><td>新功能</td><td><a href="#c-05">2FA / passkey 登入</a></td><td>P2</td><td>★★</td><td>💎💎</td></tr>
+    <tr><td>C-06</td><td>新功能</td><td><a href="#c-06">使用者面板（不只 admin）</a></td><td>P2</td><td>★★</td><td>💎💎</td></tr>
+    <tr><td>C-07</td><td>新功能</td><td><a href="#c-07">Plugin marketplace（GitHub 一鍵裝）</a></td><td>P3</td><td>★★★</td><td>💎💎</td></tr>
+    <tr><td>C-08</td><td>新功能</td><td><a href="#c-08">支援 NoSQL（MongoDB、Redis）</a></td><td>P3</td><td>★★★</td><td>💎</td></tr>
+    <tr><td>C-09</td><td>新功能</td><td><a href="#c-09">排程備份（每天自動 dump）</a></td><td>P2</td><td>★★</td><td>💎💎💎</td></tr>
+    <tr><td>C-10</td><td>新功能</td><td><a href="#c-10">桌面版（Electron / Tauri）</a></td><td>P3</td><td>★★★★</td><td>💎💎</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2 id="a-01">A-01　Storage 並行下載 / 上傳 <span class="tag license">P1</span></h2>
+  <h3>問題</h3>
+  <p>Supabase Storage 備份目前是單線程逐檔下載 / 上傳。幾千個檔案要等很久。</p>
+  <h3>建議</h3>
+  <ul>
+    <li>用 <code>p-limit</code> 控制並行度（例如 8 同時）</li>
+    <li>大檔走 streaming，小檔走 in-memory</li>
+    <li>進度顯示要對應改成 atomic counter</li>
+  </ul>
+  <h3>影響檔案</h3>
+  <p>Node：<code>lib/supabaseStorage.js</code>　|　.NET：<code>Services/SupabaseStorageService.cs</code></p>
+</div>
+
+<div class="card">
+  <h2 id="a-02">A-02　Dump 寫盤 buffer 加大 + 可選壓縮 <span class="tag license">P2</span></h2>
+  <ul>
+    <li>FileStream buffer 從 64KB 加到 1MB（或 4MB）</li>
+    <li>加 option <code>--gzip</code> → 直接寫成 <code>db.sql.gz</code>，少 70% 容量</li>
+    <li>多 DB 匯出已是 zip，內部單檔再 gzip 是 overkill</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="a-03">A-03　SSE / WebSocket 進度推送 <span class="tag license">P2</span></h2>
+  <h3>問題</h3>
+  <p>前端每 800ms poll 一次 <code>/api/jobs/:id</code>。長 job 會送幾百次 request。</p>
+  <h3>建議</h3>
+  <ul>
+    <li>改 SSE：<code>GET /api/jobs/:id/stream</code> → 每行 progress 立刻推</li>
+    <li>WebSocket overkill — SSE 對單向推送夠了</li>
+    <li>fallback：browser 不支援 / 連線斷 → 退回 polling</li>
+  </ul>
+  <h3>影響範圍</h3>
+  <p>後端：route + JobService 加 emit。前端：<code>pollJob()</code> 改成 EventSource。</p>
+</div>
+
+<div class="card">
+  <h2 id="a-04">A-04　License heartbeat 改 long-poll / SSE <span class="tag license">P3</span></h2>
+  <p>客戶 1000 人 → 每 30 秒 heartbeat → 33 req/秒。SSE long-connection 一個就夠。</p>
+  <p>規模沒到不必做。</p>
+</div>
+
+<div class="card">
+  <h2 id="b-01">B-01　加入單元 / 整合測試 <span class="tag license">P0</span></h2>
+  <h3>現狀</h3>
+  <p><b>0 個測試</b>。每次改完都靠手動點擊。</p>
+  <h3>建議</h3>
+  <ul>
+    <li>Node：vitest（速度快、API 像 jest）</li>
+    <li>.NET：xUnit + WebApplicationFactory（in-process testserver）</li>
+    <li>License Server 同上</li>
+    <li>第一批要寫的：
+      <ul>
+        <li>License gate middleware：每個 mode + feature 組合</li>
+        <li>Adapter contract test：每個 adapter 都跑同一份 dump→restore→verify</li>
+        <li>Auth 流程：register → verify → login → heartbeat → kicked</li>
+      </ul>
+    </li>
+    <li>整合測試 docker-compose 起 5 種 DB 跑 adapter</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="b-02">B-02　CI 加 lint + 自動測試 <span class="tag license">P1</span></h2>
+  <p>現有 <code>.github/workflows/ci.yml</code> 只跑 build。加：</p>
+  <ul>
+    <li>Node：<code>eslint . --max-warnings 0</code> + <code>vitest run</code></li>
+    <li>.NET：<code>dotnet format --verify-no-changes</code> + <code>dotnet test</code></li>
+    <li>結合 GitHub branch protection：必過才能 merge</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="b-03">B-03　structured logging <span class="tag license">P1</span></h2>
+  <p>目前 <code>console.log</code> 散在各處，prod 看 log 像散文。</p>
+  <ul>
+    <li>Node：<code>pino</code>（快、JSON 輸出）</li>
+    <li>.NET：<code>Serilog</code> + JSON 格式</li>
+    <li>欄位：<code>requestId / userId / event / latency / ip</code></li>
+    <li>VPS 直接 ship 到 Loki / Datadog / Better Stack</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="b-04">B-04　Audit log 拆表 <span class="tag license">P2</span></h2>
+  <p><code>event_log</code> 現在混了 debug 跟 audit。拆成：</p>
+  <ul>
+    <li><code>audit_log</code>：合規重要（login / plan_change / kicked）</li>
+    <li><code>activity_log</code>：debug 用（heartbeat、查詢）</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="b-05">B-05　Plugin 沙箱 <span class="tag license">P3</span></h2>
+  <p>目前 plugin 跑在主 process 內，能做主程式能做的所有事。第三方 plugin 可能搞砸。</p>
+  <ul>
+    <li>Node：<code>vm2</code>（已 deprecated，要找替代）/ <code>isolated-vm</code></li>
+    <li>.NET：<code>AssemblyLoadContext</code> 隔離 + <code>SecurityPermission</code></li>
+    <li>Marketplace 出現後再考慮，自寫 plugin 先不用</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="c-01">C-01　部分 table 多選匯入（真實做篩選） <span class="tag license">P0</span></h2>
+  <h3>問題</h3>
+  <p>目前 import inspect UI 上有 table checkbox 可勾，但「執行匯入」會跑整份 SQL 檔。勾選沒作用。</p>
+  <h3>建議</h3>
+  <ul>
+    <li>後端：<code>/api/import/run</code> 接受 <code>tables: [...]</code></li>
+    <li>實作：parse SQL 檔，只執行 <code>CREATE TABLE / INSERT INTO</code> 在指定 table 名單裡的 statement</li>
+    <li>注意 FK 順序、相依性</li>
+  </ul>
+  <h3>難度</h3>
+  <p>SQL parsing 不簡單。可以先用簡單的 <code>USE / DROP / CREATE / INSERT</code> 模式比對。完整 parser 用 <code>node-sql-parser</code> 或 <code>Microsoft.SqlServer.TransactSql.ScriptDom</code>。</p>
+</div>
+
+<div class="card">
+  <h2 id="c-02">C-02　DDL 完整化（FK / index / trigger） <span class="tag license">P1</span></h2>
+  <p>現在 dump 出的 schema 缺：外鍵、次要 index、trigger、stored procedure、view、sequence (PG)。</p>
+  <h3>實作分工</h3>
+  <table>
+    <tr><th>DB</th><th>外鍵 SQL</th><th>Index SQL</th><th>Trigger SQL</th></tr>
+    <tr><td>MySQL</td><td><code>information_schema.KEY_COLUMN_USAGE</code></td><td><code>SHOW INDEX</code></td><td><code>SHOW TRIGGERS</code></td></tr>
+    <tr><td>PostgreSQL</td><td><code>pg_get_constraintdef()</code></td><td><code>pg_get_indexdef()</code></td><td><code>pg_trigger</code></td></tr>
+    <tr><td>SQL Server</td><td><code>sys.foreign_keys</code></td><td><code>sys.indexes</code></td><td><code>sys.triggers</code></td></tr>
+    <tr><td>SQLite</td><td>內建在 CREATE TABLE</td><td><code>sqlite_master</code></td><td><code>sqlite_master</code></td></tr>
+  </table>
+  <p>每個 adapter 各自實作。</p>
+</div>
+
+<div class="card">
+  <h2 id="c-03">C-03　Schema diff 工具 <span class="tag license">P2</span></h2>
+  <p>給定兩個 DB connection → 比較 schema → 輸出 ALTER TABLE script。</p>
+  <ul>
+    <li>適合「dev → staging → prod 推 schema 變更」工作流</li>
+    <li>新增 <code>POST /api/diff</code> endpoint + 新前端 tab</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="c-04">C-04　綠界 / TapPay 支付 <span class="tag license">P1</span></h2>
+  <p>Stripe 有信用卡，但台灣 ATM 轉帳 / 超商繳費需要綠界。</p>
+  <ul>
+    <li><code>license-server/routes/billing-ecpay.js</code> — POST 表單 + CheckMacValue + return URL handler</li>
+    <li>對應 plan upgrade 邏輯跟 Stripe 一樣</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="c-05">C-05　2FA / passkey 登入 <span class="tag license">P2</span></h2>
+  <ul>
+    <li>2FA：用 TOTP（Google Authenticator）— <code>otplib</code> npm</li>
+    <li>passkey：WebAuthn 標準 — <code>@simplewebauthn/server</code></li>
+    <li>都加在 license server 的登入流程</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="c-06">C-06　使用者面板（不只 admin） <span class="tag license">P2</span></h2>
+  <p>目前只有 admin web UI。客戶看自己的：</p>
+  <ul>
+    <li>目前 plan、剩餘天數</li>
+    <li>已登入的裝置（IP）</li>
+    <li>強制登出其他裝置</li>
+    <li>升級 plan（按 Stripe checkout）</li>
+    <li>變更密碼</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="c-07">C-07　Plugin marketplace <span class="tag license">P3</span></h2>
+  <p>UI 上「新增 plugin」→ 貼 GitHub URL → 後台 git clone 到 plugins/</p>
+  <ul>
+    <li>需要：plugin.json metadata、簽章驗證、permission scopes</li>
+    <li>可開「精選 plugin 列表」白名單做為起步</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2 id="c-08">C-08　支援 NoSQL <span class="tag license">P3</span></h2>
+  <ul>
+    <li>MongoDB：<code>mongodump</code> 等價的 JSON dump + restore</li>
+    <li>Redis：<code>BGSAVE</code> 或 SCAN + dump key/value</li>
+    <li>Adapter 介面要加變化（NoSQL 沒有 schema 概念）</li>
+  </ul>
+  <p>市場小但對特定客戶有價值。</p>
+</div>
+
+<div class="card">
+  <h2 id="c-09">C-09　排程備份 <span class="tag license">P2</span></h2>
+  <h3>實際情境</h3>
+  <p>客戶常見需求：每晚 2 點自動 dump 整個 DB → 上傳 S3 / 寄 email 連結。</p>
+  <h3>實作</h3>
+  <ul>
+    <li>新 tab「排程任務」</li>
+    <li>後端 cron 排程器（node-cron）</li>
+    <li>支援目的地：本機檔、S3、Supabase Storage、寄 email link</li>
+    <li>排程紀錄存 SQLite</li>
+  </ul>
+  <p>這是高價值功能，企業客戶會願意為這個升級 plan。</p>
+</div>
+
+<div class="card">
+  <h2 id="c-10">C-10　桌面版 <span class="tag license">P3</span></h2>
+  <ul>
+    <li>Electron 包瀏覽器 + Node — 一個 .exe，零配置</li>
+    <li>Tauri 用 Rust + WebView — 體積小但需要 Rust 環境</li>
+    <li>適合「不想搞 server」的個人客戶</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>🎯 推薦執行順序</h2>
+  <ol>
+    <li><b>立刻做（P0）</b>：B-01（測試）+ C-01（部分 table 多選匯入）— 一個是品質基礎，一個是用戶常抱怨的痛點</li>
+    <li><b>下一個 sprint（P1）</b>：A-01、B-02、B-03、C-02、C-04 — 性能 / CI / log / DDL 完整化 / 台灣支付</li>
+    <li><b>1.0 之前（P2）</b>：A-02、A-03、B-04、C-03、C-05、C-06、C-09 — 重要但非阻擋發布</li>
+    <li><b>之後再說（P3）</b>：剩餘的 C 系列大功能</li>
+  </ol>
+</div>
+
+<div class="card">
+  <h2>📊 投入產出對照</h2>
+  <p>挑「💎 多 + ★ 少」的優先做，CP 值最高：</p>
+  <ul>
+    <li><b>A-01 Storage 並行</b>（★★ → 💎💎💎）</li>
+    <li><b>B-01 測試</b>（★★★ → 💎💎💎）— 難但回報巨大</li>
+    <li><b>B-02 CI</b>（★★ → 💎💎💎）</li>
+    <li><b>C-01 table 多選</b>（★★ → 💎💎💎）</li>
+    <li><b>C-02 DDL 完整</b>（★★★ → 💎💎💎）</li>
+    <li><b>C-09 排程備份</b>（★★ → 💎💎💎）</li>
+  </ul>
+</div>
+
+</main>
+</body>
+</html>

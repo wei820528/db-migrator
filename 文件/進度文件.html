@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>進度文件 — DB Migrator</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<script src="docs-nav.js"></script>
+<div class="hero">
+  <h1>📊 進度文件</h1>
+  <p>整體開發進度追蹤、各模組完成度、目前在做的、卡關的、下一步。隨開發進展更新。</p>
+  <a class="back" href="方案首頁.html">← 文件首頁</a>
+</div>
+<main>
+
+<!-- ============ 整體 ============ -->
+<div class="card">
+  <h2>整體進度</h2>
+  <div class="kv">
+    <div>當前版本</div>           <div>v1.0.0 <span class="tag done">released</span></div>
+    <div>上次更新</div>           <div>2026-05-17</div>
+    <div>主要里程碑</div>         <div>P0 / P1 / P2 全部完成；75+ 自動測試</div>
+  </div>
+  <h3>完整功能完成度</h3>
+  <div class="progress-bar success"><div class="fill" style="width: 100%"></div></div>
+  <p class="muted">100% — 所有 P0 / P1 / P2 完成。剩 P3（Plugin marketplace、NoSQL adapter）為延伸性功能</p>
+</div>
+
+<!-- ============ 各模組 ============ -->
+<div class="card">
+  <h2>各模組進度</h2>
+
+  <h3>① DB Migrator 核心 <span class="tag done">100%</span></h3>
+  <div class="progress-bar success"><div class="fill" style="width: 100%"></div></div>
+  <table>
+    <tr><th>項目</th><th>Node</th><th>.NET</th><th>備註</th></tr>
+    <tr><td>5 種 DB adapter (MySQL/PG/MSSQL/SQLite/Supabase)</td><td>✅</td><td>✅</td><td>純 driver、含 SSL、含 Windows auth</td></tr>
+    <tr><td>連線測試 + 列 databases + tables</td><td>✅</td><td>✅</td></tr>
+    <tr><td>單 / 多 DB 匯出（zip 打包）</td><td>✅</td><td>✅</td></tr>
+    <tr><td>匯入 inspect 對照</td><td>✅</td><td>✅</td><td>但 table 勾選未真的篩選 → C-01</td></tr>
+    <tr><td>Job 系統（in-memory）</td><td>✅</td><td>✅</td><td>無持久化 → R-03</td></tr>
+  </table>
+
+  <h3>② 專案備份 / 還原 <span class="tag done">95%</span></h3>
+  <div class="progress-bar success"><div class="fill" style="width: 95%"></div></div>
+  <table>
+    <tr><th>項目</th><th>Node</th><th>.NET</th></tr>
+    <tr><td>Code 層（Git clone / push）</td><td>✅</td><td>✅</td></tr>
+    <tr><td>DB 層（dump / restore）</td><td>✅</td><td>✅</td></tr>
+    <tr><td>Storage 層（Supabase）</td><td>✅</td><td>✅</td></tr>
+    <tr><td>backup.zip 打包 / 解開</td><td>✅</td><td>✅</td></tr>
+    <tr><td>並行下載 / 上傳優化</td><td>⚠ 單線程</td><td>⚠ 單線程</td></tr>
+  </table>
+
+  <h3>② 完整 DDL 匯出 (C-02) <span class="tag done">100%</span></h3>
+  <div class="progress-bar success"><div class="fill" style="width: 100%"></div></div>
+  <table>
+    <tr><th>DB</th><th>FK</th><th>次要 Index</th><th>Trigger</th><th>View</th></tr>
+    <tr><td>MySQL</td><td>✅ 內建</td><td>✅ 內建</td><td>✅ SHOW CREATE TRIGGER</td><td>—</td></tr>
+    <tr><td>PostgreSQL</td><td>✅ pg_get_constraintdef</td><td>✅ pg_indexes</td><td>✅ pg_get_triggerdef</td><td>—</td></tr>
+    <tr><td>SQL Server</td><td>✅ sys.foreign_keys</td><td>✅ sys.indexes</td><td>✅ OBJECT_DEFINITION</td><td>—</td></tr>
+    <tr><td>SQLite</td><td>✅ 內建</td><td>✅</td><td>✅ sqlite_master</td><td>✅ sqlite_master</td></tr>
+  </table>
+
+  <h3>② 部分 table 多選匯入 (C-01) <span class="tag done">100%</span></h3>
+  <div class="progress-bar success"><div class="fill" style="width: 100%"></div></div>
+  <p class="muted">UI 上的勾選真的篩選 SQL；header (SET/BEGIN) 永遠保留</p>
+
+  <h3>② Job 持久化 (R-03) + tmp 清理 (R-04) <span class="tag done">100%</span></h3>
+  <div class="progress-bar success"><div class="fill" style="width: 100%"></div></div>
+  <p class="muted">SQLite-backed job store (drop-in API)；server 重啟標 stale job 為 error；24h 自動清 tmp</p>
+
+  <h3>② 排程備份 (C-09) <span class="tag done">100%</span></h3>
+  <div class="progress-bar success"><div class="fill" style="width: 100%"></div></div>
+  <p class="muted">Node + .NET 對等；AES-256-GCM 加密 DB 密碼；表達式 every N min/hour/day / daily at HH:MM</p>
+
+  <h3>② 前端模組化 (R-05) <span class="tag done">100%</span></h3>
+  <div class="progress-bar success"><div class="fill" style="width: 100%"></div></div>
+  <p class="muted">app.js 從 1148 行 → 28 行 bootstrap + 12 個 modules/*.js（utils / state / presets / license / connection / databases / tabs / export / import / project / schedule / plugin-ui / modules-status）</p>
+
+  <h3>③ Plugin 架構 <span class="tag done">100%</span></h3>
+  <div class="progress-bar success"><div class="fill" style="width: 100%"></div></div>
+  <table>
+    <tr><th>項目</th><th>Node</th><th>.NET</th></tr>
+    <tr><td>Auto-discover plugins</td><td>✅ 掃 plugins/</td><td>✅ DI auto</td></tr>
+    <tr><td>失敗隔離（一個壞不影響其他）</td><td>✅</td><td>✅</td></tr>
+    <tr><td>Hot reload（不用重啟）</td><td>✅ fs.watch</td><td>❌ 需 rebuild</td></tr>
+    <tr><td>Plugin 貢獻 route / adapter / UI / static</td><td>✅</td><td>✅（無 adapter 動態）</td></tr>
+    <tr><td>範例 plugin</td><td>✅ hello/</td><td>✅ HelloController</td></tr>
+  </table>
+
+  <h3>④ 授權系統（Offline mode）<span class="tag done">100%</span></h3>
+  <div class="progress-bar success"><div class="fill" style="width: 100%"></div></div>
+  <table>
+    <tr><th>項目</th><th>Node</th><th>.NET</th></tr>
+    <tr><td>Ed25519 簽章驗證</td><td>✅ 內建 crypto</td><td>✅ BouncyCastle</td></tr>
+    <tr><td>32 天試用</td><td>✅</td><td>✅</td></tr>
+    <tr><td>License key 上傳 / 移除 UI</td><td>✅</td><td>✅</td></tr>
+    <tr><td>Key 簽發工具 (license-tools/)</td><td>✅</td><td>—</td></tr>
+  </table>
+
+  <h3>⑤ 授權系統（Online mode）<span class="tag done">100%</span></h3>
+  <div class="progress-bar success"><div class="fill" style="width: 100%"></div></div>
+  <table>
+    <tr><th>項目</th><th>狀態</th></tr>
+    <tr><td>License Server: schema + auth endpoints</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>License Server: heartbeat + IP 偵測踢人</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>License Server: max_devices 強制</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>License Server: Plan + features</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>License Server: IP 白名單 (CIDR / wildcard)</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>License Server: free_until 免費月份</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>License Server: Email 驗證 (nodemailer)</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>License Server: Rate limit</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>License Server: Admin Web UI</td><td><span class="tag done">完成</span> Dashboard / Users / Sessions / Events / Settings</td></tr>
+    <tr><td>License Server: Stripe Checkout + webhook</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>License Server: <b>綠界 (ECPay) 支付</b></td><td><span class="tag done">完成</span> 信用卡 / ATM / 超商</td></tr>
+    <tr><td>License Server: <b>2FA (TOTP)</b></td><td><span class="tag done">完成</span> Authenticator + login 兩步驟</td></tr>
+    <tr><td>License Server: <b>客戶 Portal</b></td><td><span class="tag done">完成</span> 看 plan / 在線裝置 / 改密碼 / 升級</td></tr>
+    <tr><td>Node client: heartbeat + login UI + feature gate</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>.NET client: heartbeat + login + gate</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>Admin CLI</td><td><span class="tag done">完成</span> 11 個指令</td></tr>
+  </table>
+
+  <h3>⑥ 自動測試 (B-01) <span class="tag done">100%</span></h3>
+  <div class="progress-bar success"><div class="fill" style="width: 100%"></div></div>
+  <p class="muted">75+ 個測試（node-express 37 + license-server 35 + TOTP 14）；用 Node 18+ 內建 node:test，零 framework dep</p>
+  <p class="muted"><b>測試發現 2 個真 bug 並修：</b>MSSQL bracket identifier 解析錯誤；IP 白名單 wildcard 語意錯誤</p>
+
+  <h3>⑥ 文件 <span class="tag in-progress">85%</span></h3>
+  <div class="progress-bar"><div class="fill" style="width: 85%"></div></div>
+  <table>
+    <tr><th>文件</th><th>狀態</th></tr>
+    <tr><td>方案首頁.html</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>架構展示.html</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>區塊參考.html</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>技術文件.html</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>程式碼與區塊對應文件.html</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>操作文件.html</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>使用手冊.html</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>進度文件.html</td><td><span class="tag in-progress">編寫中（你正在看）</span></td></tr>
+    <tr><td>重構計畫.html</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>優化擴充建議的計畫.html</td><td><span class="tag done">完成</span></td></tr>
+    <tr><td>HANDOVER.html</td><td><span class="tag todo">待寫</span></td></tr>
+  </table>
+</div>
+
+<!-- ============ 目前在做 ============ -->
+<div class="card">
+  <h2>🔥 目前正在做</h2>
+  <table>
+    <tr><th>任務</th><th>負責檔案</th><th>進度</th></tr>
+    <tr>
+      <td>License Server: routes/admin.js</td>
+      <td><code>license-server/routes/admin.js</code></td>
+      <td><div class="progress-bar"><div class="fill" style="width: 0%"></div></div></td>
+    </tr>
+    <tr>
+      <td>License Server: routes/stripe.js</td>
+      <td><code>license-server/routes/stripe.js</code></td>
+      <td><div class="progress-bar"><div class="fill" style="width: 0%"></div></div></td>
+    </tr>
+    <tr>
+      <td>License Server: Admin Web UI</td>
+      <td><code>license-server/public/admin.html</code> + JS</td>
+      <td><div class="progress-bar"><div class="fill" style="width: 0%"></div></div></td>
+    </tr>
+    <tr>
+      <td>.NET online client</td>
+      <td><code>dotnet8/Services/LicenseOnlineService.cs</code></td>
+      <td><div class="progress-bar"><div class="fill" style="width: 0%"></div></div></td>
+    </tr>
+  </table>
+</div>
+
+<!-- ============ 下一步 ============ -->
+<div class="card">
+  <h2>📅 下一步 Roadmap</h2>
+
+  <h3>立刻（本 sprint）</h3>
+  <ul>
+    <li><b>R-01</b>：License 三模式統一介面（Node + .NET）</li>
+    <li><b>R-02</b>：.NET online client 整合（呼應上面）</li>
+    <li><b>License Server</b>：admin web UI + Stripe webhook + admin CLI 補 set-free 指令</li>
+    <li><b>HANDOVER.html</b>：寫完整技術交接文件</li>
+  </ul>
+
+  <h3>下個 sprint</h3>
+  <ul>
+    <li><b>R-03</b>：Job 持久化（SQLite）</li>
+    <li><b>R-04</b>：tmp 自動清理排程</li>
+    <li><b>C-01</b>：部分 table 多選匯入（真實做篩選）</li>
+    <li><b>B-01</b>：加入第一批單元測試（最少 license gate + adapter contract）</li>
+  </ul>
+
+  <h3>1.0 之前</h3>
+  <ul>
+    <li>R-05 前端拆檔 / 模組化</li>
+    <li>C-02 完整 DDL（FK、index、trigger）</li>
+    <li>C-04 綠界支付（台灣場景）</li>
+    <li>C-09 排程備份（每天自動）</li>
+    <li>B-02 CI 加 lint + auto test</li>
+  </ul>
+
+  <p>詳見 <a href="重構計畫.html">重構計畫</a> 與 <a href="優化擴充建議的計畫.html">優化擴充建議</a>。</p>
+</div>
+
+<!-- ============ 卡關 / 風險 ============ -->
+<div class="card">
+  <h2>⚠ 卡關 / 風險紀錄</h2>
+
+  <table>
+    <tr><th>項目</th><th>風險</th><th>應對</th></tr>
+    <tr>
+      <td>SQLite 規模上限</td>
+      <td>License DB 超過 10000 筆可能效能下滑</td>
+      <td>到時候遷移到 PostgreSQL</td>
+    </tr>
+    <tr>
+      <td>IP 白名單對 NAT 客戶</td>
+      <td>公司用單一出口 IP 沒問題；行動使用者會被踢</td>
+      <td>提供 plan 升級成 Team (5 台) 容忍 IP churn</td>
+    </tr>
+    <tr>
+      <td>License key 被破解</td>
+      <td>Offline mode 可被 patch 掉檢查</td>
+      <td>Online mode 可緩解；終極要法律 + 正版專屬功能</td>
+    </tr>
+    <tr>
+      <td>LibGit2Sharp Linux 容器相容性</td>
+      <td>某些 Alpine 容器需要額外 libgit2 系統包</td>
+      <td>Dockerfile 加 <code>apk add libgit2</code></td>
+    </tr>
+    <tr>
+      <td>better-sqlite3 native build</td>
+      <td>Windows 客戶端首次裝可能要 VS Build Tools</td>
+      <td>已記錄在 README；可預編 binaries</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ============ 變更紀錄 ============ -->
+<div class="card">
+  <h2>📜 變更紀錄</h2>
+
+  <h3>2026-05-16 <span class="tag license">v0.2.0 dev</span></h3>
+  <ul>
+    <li>新增：Online License 完整流程（License Server + Node client + 前端 UI）</li>
+    <li>新增：Email 驗證 + Rate limit + IP 白名單 + free_until 免費月份</li>
+    <li>新增：頂層 9 份 HTML 文件（架構 / 區塊 / 技術 / 對應 / 操作 / 使用 / 進度 / 重構 / 優化）</li>
+    <li>新增：跨文件導覽列 + 滾動進度條 (docs-nav.js)</li>
+    <li>新增：商業授權結構（LICENSE / COMMERCIAL.md / CONTRIBUTING / SECURITY）</li>
+    <li>新增：CI workflow + GitHub templates</li>
+    <li>修正：CSS [hidden] 被覆蓋的問題</li>
+    <li>修正：MSSQL 錯誤訊息撈 SqlException 內層 message</li>
+  </ul>
+
+  <h3>2026-05-15 <span class="tag license">v0.1.0</span></h3>
+  <ul>
+    <li>第一個對外可用版本</li>
+    <li>5 種 DB adapter（純 driver）</li>
+    <li>專案備份 / 還原（code + db + storage）</li>
+    <li>拼圖式 plugin 架構</li>
+    <li>Offline license（Ed25519）</li>
+    <li>HTML 文件第一版</li>
+  </ul>
+</div>
+
+</main>
+</body>
+</html>

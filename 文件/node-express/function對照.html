@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>Function 對照 - DB Migrator (Node.js 版)</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; margin: 0; background: #f5f6f8; color: #1f2937; line-height: 1.7; }
+  header { background: linear-gradient(135deg, #047857, #065f46); color: #fff; padding: 24px 32px; }
+  header h1 { margin: 0; font-size: 22px; }
+  nav.topnav { background: #064e3b; padding: 10px 32px; }
+  nav.topnav a { color: #a7f3d0; text-decoration: none; margin-right: 18px; font-size: 14px; font-weight: 500; }
+  nav.topnav a:hover { color: #fff; text-decoration: underline; }
+  nav.topnav a.active { color: #fff; border-bottom: 2px solid #34d399; padding-bottom: 4px; }
+  main { max-width: 1100px; margin: 28px auto; padding: 0 24px 60px; }
+  h2 { color: #047857; border-bottom: 2px solid #d1fae5; padding-bottom: 6px; margin-top: 36px; }
+  h3 { color: #065f46; margin-top: 28px; background: #ecfdf5; padding: 8px 14px; border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; background: #fff; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  th { background: #ecfdf5; color: #065f46; font-weight: 600; }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-family: Consolas, monospace; font-size: 12px; color: #be123c; }
+  pre { background: #1f2937; color: #e5e7eb; padding: 12px 16px; border-radius: 6px; overflow-x: auto; font-size: 12px; line-height: 1.5; }
+  pre .kw { color: #c4b5fd; }
+  pre .str { color: #86efac; }
+  pre .cm { color: #9ca3af; font-style: italic; }
+  pre .fn { color: #fbbf24; }
+  .toc { background: #fff; padding: 16px 20px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 24px; }
+  .toc a { color: #047857; text-decoration: none; display: inline-block; margin-right: 18px; font-size: 13px; }
+  .toc a:hover { text-decoration: underline; }
+  .file-anchor { background: #1f2937; color: #fbbf24; padding: 4px 10px; border-radius: 4px; font-family: Consolas, monospace; font-size: 12px; }
+  .note { background: #fef3c7; border-left: 3px solid #f59e0b; padding: 8px 12px; margin: 8px 0; font-size: 13px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔧 Function 對照表 - DB Migrator (Node.js 版)</h1>
+</header>
+<nav class="topnav">
+  <a href="../index.html">總覽</a>
+  <a href="index.html">本版首頁</a>
+  <a href="操作手冊.html">操作手冊</a>
+  <a href="function對照.html" class="active">Function 對照</a>
+  <a href="UI說明.html">UI 解析</a>
+  <a href="修改指南.html">修改指南</a>
+</nav>
+<main>
+
+<div class="toc">
+  <strong>快速跳轉：</strong>
+  <a href="#server">server.js</a>
+  <a href="#routes-connection">routes/connection.js</a>
+  <a href="#routes-export">routes/export.js</a>
+  <a href="#routes-import">routes/import.js</a>
+  <a href="#routes-jobs">routes/jobs.js</a>
+  <a href="#lib-jobs">lib/jobs.js</a>
+  <a href="#adapter-index">adapters/index.js</a>
+  <a href="#adapter-shared">adapters/_shared.js</a>
+  <a href="#adapter-mysql">adapters/mysql.js</a>
+  <a href="#adapter-postgres">adapters/postgres.js</a>
+  <a href="#adapter-mssql">adapters/mssql.js</a>
+  <a href="#adapter-sqlite">adapters/sqlite.js</a>
+</div>
+
+<h2 id="server">📄 server.js <span class="file-anchor">入口檔</span></h2>
+<p>整個 app 的啟動點。建立 Express、掛載中介層與 4 個 API 路由、確保 <code>tmp/</code> 目錄存在、啟動 HTTP server。沒有實質 function，全部是設定。</p>
+<table>
+  <tr><th>段落</th><th>用途</th></tr>
+  <tr><td><code>express.json({ limit: '1mb' })</code></td><td>解析 JSON body，最大 1MB（連線資訊夠用）</td></tr>
+  <tr><td><code>express.static('public')</code></td><td>把 <code>public/</code> 目錄當靜態檔 serve（前端 SPA）</td></tr>
+  <tr><td><code>app.use('/api/...')</code></td><td>掛載 4 個 router</td></tr>
+  <tr><td>錯誤中介層</td><td>未捕捉的錯誤統一回 500 + JSON</td></tr>
+  <tr><td><code>app.listen(PORT)</code></td><td>預設 port 3000，可用 <code>process.env.PORT</code> 覆寫</td></tr>
+</table>
+
+<h2 id="routes-connection">📄 routes/connection.js <span class="file-anchor">連線測試 + 列表</span></h2>
+<table>
+  <tr><th>Function / 路由</th><th>方法</th><th>說明</th><th>請求</th><th>回應</th></tr>
+  <tr>
+    <td><code>POST /test</code></td><td>POST</td>
+    <td>測試 DB 連線，回 server 版本字串</td>
+    <td><code>{ type, host, port, user, password, database }</code></td>
+    <td><code>{ ok: true, version: "8.0.36..." }</code><br>失敗回 <code>{ ok: false, error }</code></td>
+  </tr>
+  <tr>
+    <td><code>POST /tables</code></td><td>POST</td>
+    <td>列出 DB 內所有 table（含粗略列數）</td>
+    <td>同上</td>
+    <td><code>{ tables: [{ name, rowEstimate }, ...] }</code></td>
+  </tr>
+</table>
+<div class="note">兩條路由都呼叫 <code>getAdapter(type)</code> 拿到對應 adapter，再呼叫 adapter 內的方法。</div>
+
+<h2 id="routes-export">📄 routes/export.js <span class="file-anchor">匯出主流程</span></h2>
+<table>
+  <tr><th>Function / 路由</th><th>方法</th><th>說明</th></tr>
+  <tr>
+    <td><code>POST /</code></td><td>POST</td>
+    <td>啟動匯出 job。<br>
+    1. 用 <code>jobs.create('export')</code> 拿 jobId<br>
+    2. 建立 <code>tmp/{jobId}/</code> 資料夾<br>
+    3. <strong>立即回 jobId 給前端</strong>（不等匯出完成）<br>
+    4. 背景跑 <code>adapter.dump(...)</code>，邊跑邊用 <code>jobs.append()</code> 寫進度<br>
+    5. 完成後把 status 設成 <code>done</code> 並寫 downloadUrl</td>
+  </tr>
+  <tr>
+    <td><code>GET /:id/file</code></td><td>GET</td>
+    <td>把已完成 job 的 SQL 檔送回客戶端下載。<br>找出 <code>tmp/{id}/</code> 內第一個 .sql 檔，用 <code>res.download()</code> 串流回傳。</td>
+  </tr>
+</table>
+<div class="note">匯出檔放在 <code>tmp/{jobId}/{database}.sql</code>，目前<strong>沒有自動清理</strong>，正式環境要加排程。</div>
+
+<h2 id="routes-import">📄 routes/import.js <span class="file-anchor">匯入主流程</span></h2>
+<table>
+  <tr><th>Function / 路由</th><th>方法</th><th>說明</th></tr>
+  <tr>
+    <td><code>POST /inspect</code></td><td>POST (multipart)</td>
+    <td>第一階段：上傳 SQL 檔並做檢查。<br>
+    1. 用 <code>multer</code> 接 multipart 上傳檔（限 1GB）<br>
+    2. 暫存到 <code>tmp/uploads/{uploadId}</code><br>
+    3. 呼叫 <code>adapter.parseTableNamesFromDump()</code> 從檔案抓 table 名稱<br>
+    4. 呼叫 <code>adapter.listTables()</code> 抓目標 DB 已存在的 table<br>
+    5. 做 diff 回傳：每個檔內 table 是否已存在於目標</td>
+  </tr>
+  <tr>
+    <td><code>POST /run</code></td><td>POST</td>
+    <td>第二階段：實際執行匯入。<br>
+    1. 依 <code>uploadId</code> 找到剛剛上傳的檔<br>
+    2. 建 import job 並回 jobId<br>
+    3. 背景跑 <code>adapter.restore()</code><br>
+    4. 完成後刪掉上傳的暫存檔</td>
+  </tr>
+</table>
+
+<h2 id="routes-jobs">📄 routes/jobs.js <span class="file-anchor">進度查詢</span></h2>
+<table>
+  <tr><th>Function / 路由</th><th>方法</th><th>說明</th></tr>
+  <tr>
+    <td><code>GET /:id</code></td><td>GET</td>
+    <td>回傳整個 job 物件：<code>{ id, kind, status, progress: [], result, error, createdAt }</code><br>
+    前端每 0.8 秒 polling 一次直到 status 變成 <code>done</code> 或 <code>error</code>。</td>
+  </tr>
+</table>
+
+<h2 id="lib-jobs">📄 lib/jobs.js <span class="file-anchor">記憶體型 Job Tracker</span></h2>
+<table>
+  <tr><th>Function</th><th>參數</th><th>用途</th></tr>
+  <tr><td><code>create(kind)</code></td><td><code>kind</code>: 'export' 或 'import'</td><td>產生新 job、給 UUID、放進 Map、回傳 job 物件</td></tr>
+  <tr><td><code>get(id)</code></td><td><code>id</code>: jobId</td><td>從 Map 拿 job；找不到回 null</td></tr>
+  <tr><td><code>append(id, line)</code></td><td><code>line</code>: 進度文字</td><td>把一行進度推進 <code>progress</code> 陣列；超過 200 筆會自動丟掉最舊的</td></tr>
+  <tr><td><code>setStatus(id, status, patch)</code></td><td><code>status</code>: 新狀態<br><code>patch</code>: 要合進去的欄位（result/error）</td><td>更新 status 並 merge 額外欄位</td></tr>
+</table>
+<div class="note">
+  ✨ <strong>自動清理機制：</strong>用 <code>setInterval</code> 每 10 分鐘掃一次，把建立超過 1 小時的 job 刪掉，避免記憶體膨脹。<br>
+  ⚠️ <strong>注意：</strong>jobs 存在 process 記憶體裡，<strong>重啟服務後全部清光</strong>。若要保存歷史紀錄要改用 Redis 或 SQLite。
+</div>
+
+<h2 id="adapter-index">📄 adapters/index.js <span class="file-anchor">Adapter 註冊表</span></h2>
+<pre><span class="kw">const</span> adapters = {
+  mysql:    <span class="fn">require</span>(<span class="str">'./mysql'</span>),
+  postgres: <span class="fn">require</span>(<span class="str">'./postgres'</span>),
+  mssql:    <span class="fn">require</span>(<span class="str">'./mssql'</span>),
+  sqlite:   <span class="fn">require</span>(<span class="str">'./sqlite'</span>),
+};
+
+<span class="kw">function</span> <span class="fn">getAdapter</span>(type) { ... }   <span class="cm">// 找不到丟 Error</span></pre>
+<p>所有路由都靠 <code>getAdapter(type)</code> 取得對應的 adapter 物件。<strong>加新資料庫時就是在這裡多寫一行 require。</strong></p>
+
+<h2 id="adapter-shared">📄 adapters/_shared.js <span class="file-anchor">共用工具</span></h2>
+<table>
+  <tr><th>Function</th><th>用途</th></tr>
+  <tr><td><code>escapeIdent(name, q)</code></td><td>幫 column / table 名加跳脫符號（MySQL 用 `、PG 用 "、MSSQL 用 [）</td></tr>
+  <tr><td><code>escapeStringSql(s)</code></td><td>把字串裡的 <code>'</code> 加倍轉成 SQL 字面值（ANSI 風格）</td></tr>
+  <tr><td><code>formatValueGeneric(v, opts)</code></td><td>萬用型別轉 SQL：null/數字/布林/Buffer/Date/物件 各自處理</td></tr>
+  <tr><td><code>splitSqlStatements(sql, q)</code></td><td>把多句 SQL 切成單句陣列。會正確處理 <code>--</code>、<code>/* */</code> 注釋與字串/識別字內的分號</td></tr>
+  <tr><td><code>parseTableNamesFromDumpGeneric(text, q)</code></td><td>用 regex 從 dump 文字中抓出所有 <code>CREATE TABLE xxx</code> 的 table 名</td></tr>
+</table>
+
+<h2 id="adapter-mysql">📄 adapters/mysql.js <span class="file-anchor">MySQL adapter</span></h2>
+<table>
+  <tr><th>Function</th><th>用途</th></tr>
+  <tr><td><code>buildConnConfig(c, extra)</code></td><td>把 user 的 connection 物件轉成 mysql2 的 config（含 port 預設 3306、charset utf8mb4、timeout 8 秒）</td></tr>
+  <tr><td><code>testConnection(conn)</code></td><td>建連線跑 <code>SELECT VERSION()</code>，回 <code>{ ok, version }</code></td></tr>
+  <tr><td><code>listTables(conn)</code></td><td>查 <code>information_schema.TABLES</code>，回 <code>[{ name, rowEstimate }]</code></td></tr>
+  <tr><td><code>escapeIdent(name)</code></td><td>用反引號跳脫 identifier</td></tr>
+  <tr><td><code>formatValue(v)</code></td><td>把任意值轉成 MySQL 可吃的 SQL 字面值；二進位用 <code>0x...</code></td></tr>
+  <tr><td><code>dumpTableSchema(conn, table, stream)</code></td><td>用 <code>SHOW CREATE TABLE</code> 拿 DDL 直接寫進 stream（含 DROP TABLE IF EXISTS）</td></tr>
+  <tr><td><code>dumpTableData(rawConn, table, stream, onProgress)</code></td><td>用 query stream 一筆一筆讀資料，每 500 筆或 0.5MB 就 flush 一個 multi-row INSERT</td></tr>
+  <tr><td><code>dump(conn, options, outFilePath, onProgress)</code></td><td><strong>主要匯出進入點。</strong>建立 file stream、寫 header、決定哪些 table 要 dump、逐表呼叫 schema/data 兩個 helper</td></tr>
+  <tr><td><code>restore(conn, sqlFilePath, onProgress)</code></td><td>把整份 SQL 一次餵給 <code>connection.query()</code>（要開 <code>multipleStatements: true</code>）</td></tr>
+  <tr><td><code>parseTableNamesFromDump(sqlFilePath)</code></td><td>regex 抓 <code>CREATE TABLE `xxx`</code> 內的 xxx</td></tr>
+</table>
+
+<h3>匯出資料的批次邏輯</h3>
+<pre><span class="kw">const</span> MAX_BATCH = 500;          <span class="cm">// 每 500 筆 flush 一次</span>
+<span class="kw">const</span> MAX_BYTES = 512 * 1024;   <span class="cm">// 或累積 0.5 MB 也 flush</span>
+
+<span class="cm">// 每收到一筆 row：</span>
+buffer.push(<span class="str">'  (val1, val2, ...)'</span>);
+<span class="kw">if</span> (buffer.length &gt;= MAX_BATCH || bufferBytes &gt;= MAX_BYTES) <span class="fn">flush</span>();
+
+<span class="kw">function</span> <span class="fn">flush</span>() {
+  stream.<span class="fn">write</span>(<span class="str">`INSERT INTO ... VALUES\n`</span> + buffer.<span class="fn">join</span>(<span class="str">',\n'</span>) + <span class="str">';\n'</span>);
+}</pre>
+
+<h2 id="adapter-postgres">📄 adapters/postgres.js <span class="file-anchor">PostgreSQL adapter</span></h2>
+<table>
+  <tr><th>Function</th><th>用途</th></tr>
+  <tr><td><code>buildClient(c)</code></td><td>建 <code>pg.Client</code>（預設 port 5432）</td></tr>
+  <tr><td><code>testConnection / listTables</code></td><td>同 MySQL 概念，差別在用 PG 的 information_schema 查詢，回傳 table 名是 <code>schema.table</code> 格式</td></tr>
+  <tr><td><code>getTableDDL(c, schema, table)</code></td><td><strong>自己組 DDL</strong>（PG 沒有 SHOW CREATE TABLE）：查 columns、PK，組合成 <code>CREATE TABLE</code></td></tr>
+  <tr><td><code>dumpTableData(...)</code></td><td>用 <code>pg-query-stream</code> 串流讀資料（避免一次撈進記憶體）</td></tr>
+  <tr><td><code>dump(...)</code></td><td>主入口；多了 <code>schema.table</code> 拆分邏輯</td></tr>
+  <tr><td><code>restore(...)</code></td><td>用 <code>splitSqlStatements</code> 切句後逐句送（PG 不支援 multipleStatements）</td></tr>
+</table>
+
+<h2 id="adapter-mssql">📄 adapters/mssql.js <span class="file-anchor">SQL Server adapter</span></h2>
+<table>
+  <tr><th>Function</th><th>用途</th></tr>
+  <tr><td><code>buildConfig(c)</code></td><td>建 mssql 套件的 config（含 <code>trustServerCertificate: true</code>）</td></tr>
+  <tr><td><code>bracket(n)</code></td><td>用 <code>[ ]</code> 跳脫 identifier（T-SQL 風格）</td></tr>
+  <tr><td><code>fmt(v)</code></td><td>包裝 <code>formatValueGeneric</code>：字串用 <code>N'...'</code>、二進位 <code>0x...</code>、布林用 0/1</td></tr>
+  <tr><td><code>getTableDDL(pool, schema, table)</code></td><td>查 <code>sys.columns</code>、<code>sys.types</code>、<code>sys.indexes</code> 組 DDL，含 IDENTITY 與 default 處理</td></tr>
+  <tr><td><code>dumpTableData(...)</code></td><td>用 <code>pool.request().stream = true</code> 串流</td></tr>
+  <tr><td><code>splitMsSqlBatches(text)</code></td><td>MSSQL 特有：按 <code>GO</code> 分批（sqlcmd 指令）</td></tr>
+  <tr><td><code>restore(...)</code></td><td>逐批送進 <code>request().batch()</code></td></tr>
+</table>
+
+<h2 id="adapter-sqlite">📄 adapters/sqlite.js <span class="file-anchor">SQLite adapter</span></h2>
+<table>
+  <tr><th>Function</th><th>用途</th></tr>
+  <tr><td><code>pickPath(c)</code></td><td>從 <code>c.path / c.database / c.host</code> 三選一拿檔案路徑</td></tr>
+  <tr><td><code>open(c, readonly)</code></td><td>呼叫 <code>better-sqlite3</code> 打開 DB；read 用 readonly、restore 用 read-write</td></tr>
+  <tr><td><code>testConnection / listTables</code></td><td>查 <code>sqlite_master</code></td></tr>
+  <tr><td><code>dump(...)</code></td><td>直接讀 <code>sqlite_master.sql</code> 拿原始 DDL（SQLite 原生就有存）；資料用 iterator；<strong>SQLite 是唯一會輸出 index 的 adapter</strong></td></tr>
+  <tr><td><code>restore(...)</code></td><td>用 <code>db.exec()</code> 在 transaction 內逐句執行；自動 ROLLBACK 失敗的</td></tr>
+</table>
+
+<h2>所有 adapter 都實作的 5 個方法</h2>
+<p>這是 adapter 的「介面合約」。<strong>新加任何 DB 都要實作這 5 個。</strong></p>
+<table>
+  <tr><th>方法</th><th>簽名</th><th>用途</th></tr>
+  <tr><td>testConnection</td><td><code>(conn) =&gt; { ok, version, error? }</code></td><td>確認可連線並回版本</td></tr>
+  <tr><td>listTables</td><td><code>(conn) =&gt; [{ name, rowEstimate }]</code></td><td>給前端顯示</td></tr>
+  <tr><td>dump</td><td><code>(conn, options, outFilePath, onProgress) =&gt; void</code></td><td>把 DB 寫成 .sql 檔</td></tr>
+  <tr><td>restore</td><td><code>(conn, sqlFilePath, onProgress) =&gt; void</code></td><td>把 .sql 灌進 DB</td></tr>
+  <tr><td>parseTableNamesFromDump</td><td><code>(sqlFilePath) =&gt; [string]</code></td><td>從 dump 抓 table 名（給 inspect 用）</td></tr>
+</table>
+
+</main>
+</body>
+</html>

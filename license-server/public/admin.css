@@ -1,0 +1,147 @@
+/* License Server Admin UI */
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #f5f6f8;
+  color: #1f2937;
+  font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+  font-size: 14px;
+}
+
+/* ========== LOGIN ========== */
+.screen { min-height: 100vh; display: flex; align-items: center; justify-content: center;
+          background: linear-gradient(135deg, #064e3b, #1e3a8a); padding: 24px; }
+.login-box { background: white; border-radius: 14px; padding: 40px; width: 100%; max-width: 380px;
+             box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; }
+.login-box .logo-mini { width: 56px; height: 56px;
+                         background: linear-gradient(135deg, #c47a2d, #9d5d1e);
+                         border-radius: 14px; display: inline-flex; align-items: center;
+                         justify-content: center; font-size: 22px; font-weight: 800; color: white;
+                         box-shadow: 0 6px 20px rgba(196,122,45,0.4); margin-bottom: 16px; }
+.login-box h1 { margin: 0; font-size: 22px; }
+.login-box .subtitle { color: #6b7280; margin: 4px 0 24px; }
+.login-box form { display: flex; flex-direction: column; gap: 10px; }
+.login-box input { padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+.login-box button { background: #c47a2d; color: white; border: 0; padding: 10px;
+                    border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.login-box button:hover { background: #9d5d1e; }
+.login-box .msg { font-size: 12px; color: #dc2626; min-height: 16px; margin: 8px 0 0; }
+.login-box .msg.ok { color: #059669; }
+
+/* ========== APP SHELL ========== */
+.topbar {
+  background: #1f2937; color: white; padding: 12px 24px;
+  display: flex; align-items: center; gap: 20px;
+  position: sticky; top: 0; z-index: 50;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.topbar .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.topbar .brand .logo-mini { width: 28px; height: 28px;
+                             background: linear-gradient(135deg, #c47a2d, #9d5d1e);
+                             border-radius: 7px; display: inline-flex; align-items: center;
+                             justify-content: center; font-size: 12px; font-weight: 800; color: white; }
+.topbar .tabs { display: flex; gap: 4px; flex: 1; }
+.topbar .tab { background: transparent; color: #9ca3af; border: 0; padding: 6px 12px;
+                border-radius: 6px; cursor: pointer; font-size: 13px; transition: all .15s; }
+.topbar .tab:hover { background: rgba(255,255,255,0.1); color: white; }
+.topbar .tab.active { background: #c47a2d; color: white; }
+.topbar-right { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.muted { color: #9ca3af; }
+.btn-ghost { background: transparent; color: #cbd5e1; border: 1px solid #4b5563;
+              padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.btn-ghost:hover { background: rgba(255,255,255,0.1); color: white; }
+
+.tab-panel { max-width: 1280px; margin: 24px auto; padding: 0 24px; }
+
+/* ========== STAT GRID ========== */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+              border-left: 4px solid #c47a2d; transition: transform .2s ease; }
+.stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.stat-num { font-size: 28px; font-weight: 700; color: #1f2937; }
+.stat-label { color: #6b7280; font-size: 13px; margin-top: 4px; }
+
+/* ========== CARD ========== */
+.card { background: white; border-radius: 10px; padding: 20px 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px; }
+.card h2 { margin: 0 0 12px; font-size: 16px; color: #374151; padding-bottom: 8px;
+           border-bottom: 2px solid #fef2e2; }
+
+/* ========== TOOLBAR ========== */
+.toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.toolbar input, .toolbar select {
+  padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;
+}
+.toolbar input { flex: 1; max-width: 360px; }
+.btn-primary { background: #c47a2d; color: white; border: 0; padding: 8px 16px;
+                border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; }
+.btn-primary:hover { background: #9d5d1e; }
+.btn-warn { background: #f59e0b; color: white; border: 0; padding: 8px 14px;
+             border-radius: 6px; cursor: pointer; font-size: 13px; }
+.btn-warn:hover { background: #d97706; }
+.btn-danger { background: #dc2626; color: white; border: 0; padding: 8px 14px;
+               border-radius: 6px; cursor: pointer; font-size: 13px; }
+.btn-danger:hover { background: #b91c1c; }
+
+/* ========== DATA TABLE ========== */
+.data-table { width: 100%; border-collapse: collapse; background: white;
+              border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); font-size: 13px; }
+.data-table th { background: #fef2e2; color: #9d5d1e; text-align: left;
+                 padding: 10px 14px; font-weight: 600; font-size: 12px;
+                 text-transform: uppercase; letter-spacing: 0.05em; }
+.data-table td { padding: 10px 14px; border-top: 1px solid #f3f4f6; vertical-align: middle; }
+.data-table tr:hover td { background: #fcf9f3; }
+.data-table .badge { display: inline-block; padding: 2px 8px; border-radius: 10px;
+                      font-size: 11px; font-weight: 600; }
+.data-table .badge.trial { background: #fef3c7; color: #92400e; }
+.data-table .badge.basic { background: #dbeafe; color: #1e40af; }
+.data-table .badge.team { background: #ede9fe; color: #5b21b6; }
+.data-table .badge.enterprise { background: #fce7f3; color: #9d174d; }
+.data-table .badge.licensed { background: #d1fae5; color: #065f46; }
+.data-table .badge.expired { background: #fef2f2; color: #991b1b; }
+.data-table .badge.online { background: #dcfce7; color: #15803d; }
+.data-table .row-action { background: transparent; color: #c47a2d; border: 0;
+                           cursor: pointer; padding: 4px 8px; font-size: 13px; }
+.data-table .row-action:hover { text-decoration: underline; }
+.data-table .row-action.danger { color: #dc2626; }
+
+/* ========== MODAL ========== */
+.modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,0.55); }
+.modal-box { position: relative; background: white; border-radius: 12px; padding: 28px;
+              width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto;
+              box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+.modal-box h2 { margin: 0 0 16px; font-size: 18px; color: #1f2937; }
+.modal-box label { display: block; margin: 10px 0; font-size: 13px; color: #4b5563; }
+.modal-box label.checkbox { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; }
+.modal-box input[type="email"], .modal-box input[type="password"], .modal-box input[type="text"],
+.modal-box input[type="number"], .modal-box input[type="datetime-local"], .modal-box select,
+.modal-box textarea {
+  display: block; width: 100%; margin-top: 4px;
+  padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;
+  font-family: inherit;
+}
+.modal-box textarea { resize: vertical; }
+.modal-box .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.modal-box .form-row { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+.modal-box .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;
+                              padding-top: 16px; border-top: 1px solid #e5e7eb; flex-wrap: wrap; }
+
+/* ========== Code block ========== */
+.code { background: #1e293b; color: #e2e8f0; padding: 14px 18px; border-radius: 8px;
+        font-family: "JetBrains Mono", Consolas, monospace; font-size: 12px;
+        line-height: 1.5; white-space: pre-wrap; overflow-x: auto; }
+
+/* ========== Stripe status ========== */
+.stripe-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; font-size: 14px; }
+.stripe-row .indicator { width: 10px; height: 10px; border-radius: 50%; background: #dc2626; }
+.stripe-row .indicator.ok { background: #10b981; }
+
+/* ========== Animations ========== */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tab-panel { animation: slideIn .25s ease; }
+.modal-box { animation: slideIn .2s ease; }

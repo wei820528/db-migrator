@@ -1,0 +1,12 @@
+bin/
+obj/
+tmp/
+.vs/
+*.user
+.schedule-key
+schedules.db*
+jobs.db*
+.auth-token
+license.key
+.trial
+scheduled-backups/

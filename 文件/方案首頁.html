@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DB Migrator — 方案首頁</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --paper: #ffffff;
+    --ink: #1f2937;
+    --ink-soft: #4b5563;
+    --muted: #9ca3af;
+    --primary: #c47a2d;
+    --primary-dark: #9d5d1e;
+    --primary-soft: #fef2e2;
+    --accent: #3a7d7b;
+    --accent-soft: #e3f0ef;
+    --line: #e6e1d8;
+  }
+  * { box-sizing: border-box; }
+  /* Top nav (injected by docs-nav.js) */
+  .top-nav { position: sticky; top: 0; z-index: 100; background: rgba(254,252,247,0.92);
+             backdrop-filter: blur(14px) saturate(180%); border-bottom: 1px solid var(--line);
+             padding: 12px 24px; display: flex; align-items: center; gap: 14px; font-size: 13px; }
+  .top-nav .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ink); text-decoration: none; }
+  .top-nav .brand .logo-mini { width: 28px; height: 28px; background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+                                border-radius: 7px; display: inline-flex; align-items: center; justify-content: center;
+                                color: white; font-weight: 800; font-size: 12px; box-shadow: 0 3px 10px rgba(196,122,45,0.3); }
+  .top-nav .nav-links { display: flex; gap: 4px; flex-wrap: wrap; }
+  .top-nav .nav-links a { color: var(--ink-soft); text-decoration: none; padding: 4px 10px; border-radius: 6px; transition: all .2s ease; }
+  .top-nav .nav-links a:hover { background: var(--primary-soft); color: var(--primary-dark); }
+  .top-nav .nav-links a.active { background: var(--primary); color: white; }
+  .top-nav .meta { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .scroll-progress { position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+                     background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+                     z-index: 200; transition: width .1s linear; box-shadow: 0 1px 4px rgba(196,122,45,0.4); }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(ellipse at top left, rgba(196,122,45,0.12), transparent 60%),
+      radial-gradient(ellipse at bottom right, rgba(58,125,123,0.10), transparent 60%),
+      linear-gradient(180deg, #fefcf7 0%, #f7f3ea 100%);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC",
+                 "PingFang TC", "Microsoft JhengHei", sans-serif;
+    min-height: 100vh;
+    padding: 60px 24px;
+  }
+  .container { max-width: 980px; margin: 0 auto; }
+  .header { text-align: center; margin-bottom: 56px; }
+  .logo {
+    width: 80px; height: 80px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border-radius: 20px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 32px; font-weight: 800;
+    margin-bottom: 24px;
+    box-shadow: 0 12px 32px rgba(196,122,45,0.35);
+  }
+  h1 {
+    font-size: 40px; font-weight: 700;
+    margin: 0 0 10px; color: var(--ink);
+    letter-spacing: -0.5px;
+  }
+  .subtitle { font-size: 17px; color: var(--ink-soft); margin-bottom: 4px; }
+  .path {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 12px; color: var(--muted);
+    background: white; border: 1px solid var(--line);
+    padding: 4px 12px; border-radius: 6px;
+    display: inline-block; margin-top: 12px;
+  }
+
+  .docs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 48px;
+  }
+  @media (max-width: 700px) { .docs { grid-template-columns: 1fr; } }
+  .doc-card {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 32px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.05);
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+  }
+  .doc-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.10);
+    border-color: var(--primary);
+  }
+  .doc-icon {
+    width: 56px; height: 56px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; margin-bottom: 18px;
+    color: white;
+  }
+  .doc-icon.tech     { background: linear-gradient(135deg, #1f6feb, #4c8bf5); box-shadow: 0 6px 20px rgba(31,111,235,0.35); }
+  .doc-icon.user     { background: linear-gradient(135deg, #c47a2d, #9d5d1e); box-shadow: 0 6px 20px rgba(196,122,45,0.35); }
+  .doc-icon.arch     { background: linear-gradient(135deg, #3F51B5, #303F9F); box-shadow: 0 6px 20px rgba(63,81,181,0.35); }
+  .doc-icon.ref      { background: linear-gradient(135deg, #00897B, #00695C); box-shadow: 0 6px 20px rgba(0,137,123,0.35); }
+  .doc-icon.refactor { background: linear-gradient(135deg, #5e35b1, #4527a0); box-shadow: 0 6px 20px rgba(94,53,177,0.35); }
+  .doc-icon.boost    { background: linear-gradient(135deg, #16a34a, #15803d); box-shadow: 0 6px 20px rgba(22,163,74,0.35); }
+  .doc-icon.ops      { background: linear-gradient(135deg, #db2777, #9d174d); box-shadow: 0 6px 20px rgba(219,39,119,0.35); }
+  .doc-icon.map      { background: linear-gradient(135deg, #0ea5e9, #0369a1); box-shadow: 0 6px 20px rgba(14,165,233,0.35); }
+  .doc-icon.spec     { background: linear-gradient(135deg, #7c3aed, #5b21b6); box-shadow: 0 6px 20px rgba(124,58,237,0.35); }
+
+  .doc-tag {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    letter-spacing: 1.2px; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 12px;
+    margin-bottom: 10px;
+  }
+  .doc-tag.tech     { background: rgba(31,111,235,0.12); color: #1f6feb; }
+  .doc-tag.user     { background: rgba(196,122,45,0.12); color: #9d5d1e; }
+  .doc-tag.arch     { background: rgba(63,81,181,0.12); color: #3F51B5; }
+  .doc-tag.ref      { background: rgba(0,137,123,0.12); color: #00695C; }
+  .doc-tag.refactor { background: rgba(94,53,177,0.12); color: #4527a0; }
+  .doc-tag.boost    { background: rgba(22,163,74,0.12); color: #15803d; }
+  .doc-tag.ops      { background: rgba(219,39,119,0.12); color: #9d174d; }
+  .doc-tag.map      { background: rgba(14,165,233,0.12); color: #0369a1; }
+  .doc-tag.spec     { background: rgba(124,58,237,0.12); color: #5b21b6; }
+
+  .doc-card h2 { font-size: 20px; margin: 0 0 8px; color: var(--ink); font-weight: 700; }
+  .doc-card .desc {
+    font-size: 14px; color: var(--ink-soft); line-height: 1.65;
+    margin-bottom: 18px; flex: 1;
+  }
+  .doc-card .meta {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 18px; padding-top: 14px;
+    border-top: 1px dashed var(--line);
+  }
+  .doc-card .meta-item { font-size: 12px; color: var(--muted); }
+  .doc-card .meta-item strong { color: var(--ink); font-weight: 600; }
+  .doc-card .cta {
+    color: var(--primary); font-weight: 600; font-size: 14px;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .doc-card.tech .cta     { color: #1f6feb; }
+  .doc-card.arch .cta     { color: #3F51B5; }
+  .doc-card.ref .cta      { color: #00695C; }
+  .doc-card.refactor .cta { color: #4527a0; }
+  .doc-card.boost .cta    { color: #15803d; }
+  .doc-card.ops .cta      { color: #9d174d; }
+  .doc-card.map .cta      { color: #0369a1; }
+  .doc-card.spec .cta     { color: #5b21b6; }
+
+  .copy-section {
+    background: white; border: 1px solid var(--line);
+    border-radius: 16px; padding: 32px; margin-bottom: 32px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+  }
+  .copy-section h3 { margin: 0 0 8px; font-size: 20px; font-weight: 700; }
+  .copy-section p { color: var(--ink-soft); margin: 0 0 16px; font-size: 14px; }
+  .code-block {
+    background: #1e293b; color: #e2e8f0;
+    padding: 16px 20px; border-radius: 10px;
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 13px; line-height: 1.7;
+    overflow-x: auto; position: relative;
+  }
+  .code-block code { color: #fbbf24; }
+
+  footer {
+    text-align: center; color: var(--muted);
+    font-size: 13px; padding: 24px 0;
+    border-top: 1px solid var(--line);
+  }
+</style>
+</head>
+<body>
+<script src="docs-nav.js"></script>
+<div class="container">
+
+  <div class="header">
+    <div class="logo">DB</div>
+    <h1>DB Migrator</h1>
+    <p class="subtitle">資料庫匯出 / 匯入 + 專案備份還原 · 商業授權版</p>
+    <div class="path">F:\匯出資料庫的bat\文件\</div>
+  </div>
+
+  <div class="docs">
+
+    <a href="架構展示.html" class="doc-card arch">
+      <div class="doc-icon arch">🏛️</div>
+      <span class="doc-tag arch">架構</span>
+      <h2>架構展示</h2>
+      <p class="desc">
+        整體系統視圖、單個 DB Migrator 內部結構、License Server 內部、
+        請求流（登入 / heartbeat / 被踢 / 試用版被擋下）、授權三模式對照、
+        Plugin 架構、失敗隔離說明。
+      </p>
+      <div class="meta">
+        <div class="meta-item"><strong>8</strong> 個圖示說明</div>
+        <div class="meta-item"><strong>ASCII</strong> 架構圖</div>
+      </div>
+      <div class="cta">開啟架構展示 →</div>
+    </a>
+
+    <a href="區塊參考.html" class="doc-card ref">
+      <div class="doc-icon ref">📦</div>
+      <span class="doc-tag ref">速查</span>
+      <h2>區塊參考</h2>
+      <p class="desc">
+        每個 module 的快速參考卡：頂層資料夾、Routes / Controllers、Adapters、
+        Services、License Server 區塊、資料表 schema、Plan 矩陣、環境變數對照。
+      </p>
+      <div class="meta">
+        <div class="meta-item"><strong>9</strong> 大區塊</div>
+        <div class="meta-item"><strong>速查表</strong></div>
+      </div>
+      <div class="cta">開啟區塊參考 →</div>
+    </a>
+
+    <a href="技術文件.html" class="doc-card spec">
+      <div class="doc-icon spec">🔬</div>
+      <span class="doc-tag spec">規格</span>
+      <h2>技術文件</h2>
+      <p class="desc">
+        Tech Stack（Node / .NET / License Server 各版本套件）、API 完整規格、
+        License Server DB Schema、License Key 格式、安全模型、部署範例、
+        性能容量參考。
+      </p>
+      <div class="meta">
+        <div class="meta-item"><strong>10</strong> 章節</div>
+        <div class="meta-item"><strong>API + Schema</strong></div>
+      </div>
+      <div class="cta">開啟技術文件 →</div>
+    </a>
+
+    <a href="程式碼與區塊對應文件.html" class="doc-card map">
+      <div class="doc-icon map">🗺️</div>
+      <span class="doc-tag map">索引</span>
+      <h2>程式碼與區塊對應</h2>
+      <p class="desc">
+        「我想做 X，要改哪個檔？」型導覽。20 個常見任務（加新 DB、改 plan、
+        IP 白名單、接 Stripe、改 banner 文字…）每個都直接給檔案位置 + 步驟。
+      </p>
+      <div class="meta">
+        <div class="meta-item"><strong>20</strong> 任務情境</div>
+        <div class="meta-item"><strong>檔案路徑</strong></div>
+      </div>
+      <div class="cta">開啟對應文件 →</div>
+    </a>
+
+    <a href="操作文件.html" class="doc-card ops">
+      <div class="doc-icon ops">🛠️</div>
+      <span class="doc-tag ops">運維</span>
+      <h2>操作文件</h2>
+      <p class="desc">
+        日常運維手冊：起 / 停 / 部署、客戶第一次使用流程、Admin 常用任務（CLI 範例）、
+        備份 license.db、VPS 部署 + Caddy + systemd、疑難排解（無法登入 / IP 一直變被踢）、
+        月維護清單、安全檢查、緊急應對。
+      </p>
+      <div class="meta">
+        <div class="meta-item"><strong>10</strong> 章節</div>
+        <div class="meta-item"><strong>含 SOP</strong></div>
+      </div>
+      <div class="cta">開啟操作文件 →</div>
+    </a>
+
+    <a href="使用手冊.html" class="doc-card user">
+      <div class="doc-icon user">📖</div>
+      <span class="doc-tag user">給客戶</span>
+      <h2>使用手冊</h2>
+      <p class="desc">
+        給終端使用者看的：第一次使用 → 註冊試用 → 連線 DB → 匯出 → 匯入。
+        含截圖式說明、試用版限制清楚標示、購買升級指引、常見問題 Q&amp;A。
+        無程式碼，淺色友善風。
+      </p>
+      <div class="meta">
+        <div class="meta-item"><strong>10</strong> 章節</div>
+        <div class="meta-item"><strong>圖文式</strong></div>
+      </div>
+      <div class="cta">開啟使用手冊 →</div>
+    </a>
+
+    <a href="HANDOVER.html" class="doc-card tech">
+      <div class="doc-icon tech">💻</div>
+      <span class="doc-tag tech">給工程師</span>
+      <h2>交接文件</h2>
+      <p class="desc">
+        完整技術交接（深色主題 + TOC sidebar）：專案總覽、檔案結構、
+        Adapter 介面契約、License 三模式、Plugin host、Stripe 整合、
+        每個 function 的用途說明、踩坑與排錯。給接手的工程師看。
+      </p>
+      <div class="meta">
+        <div class="meta-item"><strong>~25</strong> 章節</div>
+        <div class="meta-item"><strong>深色</strong></div>
+        <div class="meta-item"><strong>含 TOC</strong></div>
+      </div>
+      <div class="cta">開啟交接文件 →</div>
+    </a>
+
+    <a href="重構計畫.html" class="doc-card refactor">
+      <div class="doc-icon refactor">📐</div>
+      <span class="doc-tag refactor">重構</span>
+      <h2>重構計畫</h2>
+      <p class="desc">
+        10 項重構工作：License 三模式統一介面、.NET online client 補齊、
+        Job 持久化、tmp 自動清、前端拆檔模組化、Adapter 型別化…
+        標 P0~P3 + 難度 + 影響範圍 + 推薦執行順序。
+      </p>
+      <div class="meta">
+        <div class="meta-item"><strong>10</strong> 項</div>
+        <div class="meta-item"><strong>4</strong> 波執行</div>
+      </div>
+      <div class="cta">開啟重構計畫 →</div>
+    </a>
+
+    <a href="優化擴充建議的計畫.html" class="doc-card boost">
+      <div class="doc-icon boost">🚀</div>
+      <span class="doc-tag boost">擴充</span>
+      <h2>優化擴充建議</h2>
+      <p class="desc">
+        20 項建議分三類：A 效能（Storage 並行 / SSE 推送）、
+        B 程式碼健康（測試 / CI / structured log）、
+        C 新功能（部分 table 多選匯入 / 完整 DDL / Schema diff /
+        綠界支付 / 2FA / 排程備份 / Plugin marketplace…）。
+        標 P0~P3 + 難度 ★ + 效益 💎。
+      </p>
+      <div class="meta">
+        <div class="meta-item"><strong>20</strong> 項</div>
+        <div class="meta-item"><strong>P0~P3</strong></div>
+        <div class="meta-item"><strong>CP 值排序</strong></div>
+      </div>
+      <div class="cta">開啟優化計畫 →</div>
+    </a>
+
+  </div>
+
+  <div class="copy-section">
+    <h3>⚡ 快速啟動三件元件</h3>
+    <p>License server 必須先起，兩個 DB Migrator 才能用 online mode。</p>
+    <div class="code-block"><code># ① License Server (port 4000)
+cd F:\匯出資料庫的bat\license-server
+npm install &amp;&amp; npm start
+
+# ② DB Migrator Node (port 3000)
+cd F:\匯出資料庫的bat\node-express
+$env:LICENSE_MODE="online"; $env:LICENSE_SERVER_URL="http://localhost:4000"
+npm install &amp;&amp; npm start
+
+# ③ DB Migrator .NET (port 3001)
+cd F:\匯出資料庫的bat\dotnet8
+$env:LICENSE_MODE="online"; $env:LICENSE_SERVER_URL="http://localhost:4000"
+dotnet restore &amp;&amp; dotnet run</code></div>
+  </div>
+
+  <div class="copy-section">
+    <h3>📚 還有原本的兩版專屬文件</h3>
+    <p>每個版本（Node / .NET）各自還有 4 份操作 / function / UI / 修改指南文件：</p>
+    <div class="code-block"><code>文件\
+├── node-express\index.html, 操作手冊, function對照, UI說明, 修改指南
+└── dotnet8\index.html,     操作手冊, function對照, UI說明, 修改指南</code></div>
+    <p style="margin-top: 12px;">
+      入口：<a href="index.html" style="color: var(--primary);">原版 index.html (兩版專屬文件入口)</a>
+    </p>
+  </div>
+
+  <footer>
+    📅 文件更新日期：2026-05-16　|　DB Migrator v0.2.0
+  </footer>
+
+</div>
+</body>
+</html>
