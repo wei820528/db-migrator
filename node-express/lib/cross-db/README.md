@@ -16,7 +16,9 @@ later is one parser + one emitter, not N² translators.
 | 2c | `dumpNeutral(conn, opts, outFile)` per adapter | done |
 | 2d | Value encoder (Date / Buffer / JSON → portable JSONL) | done |
 | 2e | Tests (encoder + format + sqlite e2e) | done |
-| 3  | Cross-DB restore (read JSONL, emit target dialect) | pending |
+| 3a | `tables.js` — IR → `CREATE TABLE` + `CREATE INDEX` per target | done |
+| 3b | `restoreNeutral(conn, neutralPath)` per adapter (sqlite / mysql / pg) | done |
+| 3c | Tests + sqlite end-to-end (`dumpNeutral` → `restoreNeutral` round-trip) | done |
 | 4  | Dry-run preview UI | pending |
 | 5  | Integration matrix (6 directions) | pending |
 
@@ -69,13 +71,15 @@ before the actual run. Examples:
 - [emit.js](emit.js) — IR `type` object → target-dialect column DDL string
 - [encode.js](encode.js) — driver value ↔ JSON-safe value, schema-guided (Date / Buffer / BigInt / JSON)
 - [format.js](format.js) — `NeutralWriter` / `readNeutral` / `readMetadata` for the JSONL event stream
+- [tables.js](tables.js) — IR table → `CREATE TABLE` + `CREATE INDEX` per target dialect (handles SERIAL / AUTOINCREMENT / AUTO_INCREMENT, PK clause inlining for sqlite, default-value heuristic)
 - [index.js](index.js) — public surface: `normalize(dialect, source) → ir`, `emit(ir, target) → { sql, warnings }`, `translate(src, srcD, tgtD)`
 
-Adapter-side additions (Phase 2):
+Adapter-side additions:
 
-- [adapters/sqlite.js](../../adapters/sqlite.js) — adds `getSchema(conn, tables?)` + `dumpNeutral(conn, opts, outFile)`
-- [adapters/mysql.js](../../adapters/mysql.js)  — same
-- [adapters/postgres.js](../../adapters/postgres.js) — same
+- Phase 2: `getSchema(conn, tables?)` + `dumpNeutral(conn, opts, outFile)`
+- Phase 3: `restoreNeutral(conn, neutralPath, onProgress)` — reads JSONL, emits target-dialect DDL, runs parameterized INSERTs (no escaping required)
+
+All three implemented in [adapters/sqlite.js](../../adapters/sqlite.js), [adapters/mysql.js](../../adapters/mysql.js), [adapters/postgres.js](../../adapters/postgres.js).
 
 ## Neutral JSONL format (v1)
 
@@ -97,5 +101,6 @@ Value-encoding rules are schema-guided (see [encode.js](encode.js) docstring) �
 
 `node --test ../../test/cross-db.test.js` — Phase 1 (56 tests)
 `node --test ../../test/cross-db-format.test.js` — Phase 2 (25 tests, 4 skipped if better-sqlite3 not installed)
+`node --test ../../test/cross-db-tables.test.js` — Phase 3 (26 tests, 3 skipped if better-sqlite3 not installed)
 
 Run from project root: `npm test --prefix node-express`.

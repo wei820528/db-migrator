@@ -3,8 +3,9 @@ const mysql = require('mysql2');
 const mysqlPromise = require('mysql2/promise');
 const { extractRoutineBlocks, ROUTINE_BEGIN, ROUTINE_END } = require('./_shared');
 const { normalize } = require('../lib/cross-db');
-const { NeutralWriter } = require('../lib/cross-db/format');
-const { encodeRow } = require('../lib/cross-db/encode');
+const { NeutralWriter, readNeutral } = require('../lib/cross-db/format');
+const { encodeRow, decodeRow } = require('../lib/cross-db/encode');
+const { buildCreateTable, buildCreateIndexes } = require('../lib/cross-db/tables');
 
 function buildConnConfig(c, extra = {}) {
   return {
@@ -411,6 +412,73 @@ async function dumpNeutral(conn, options, outFilePath, onProgress) {
   return { outFilePath };
 }
 
+async function restoreNeutral(conn, neutralPath, onProgress) {
+  const c = await mysqlPromise.createConnection(buildConnConfig(conn, { multipleStatements: false }));
+  const schemas = new Map();
+  const allWarnings = [];
+  const BATCH = 500;
+
+  try {
+    await c.query('SET FOREIGN_KEY_CHECKS=0');
+    let rowBatch = [];      // { table, colNames, rows }
+    let pendingTable = null;
+
+    async function flushBatch() {
+      if (!pendingTable || rowBatch.length === 0) return;
+      const schema = schemas.get(pendingTable);
+      const colNames = schema.columns.map((c) => c.name);
+      const placeholders = '(' + colNames.map(() => '?').join(',') + ')';
+      const sql = `INSERT INTO ${escapeIdent(pendingTable)} (${colNames.map(escapeIdent).join(',')}) VALUES ${rowBatch.map(() => placeholders).join(',')}`;
+      await c.query(sql, rowBatch.flat());
+      rowBatch = [];
+    }
+
+    for await (const evt of readNeutral(neutralPath)) {
+      if (evt.op === 'header') {
+        onProgress?.(`Source: ${evt.sourceDialect} ${evt.db} (${evt.tables?.length ?? '?'} table(s))`);
+        continue;
+      }
+      if (evt.op === 'schema') {
+        await flushBatch();
+        schemas.set(evt.table, evt);
+        const { sql, warnings } = buildCreateTable(evt, 'mysql');
+        allWarnings.push(...warnings);
+        await c.query(`DROP TABLE IF EXISTS ${escapeIdent(evt.table)}`);
+        await c.query(sql);
+        for (const idx of buildCreateIndexes(evt, 'mysql')) {
+          try { await c.query(idx.replace(/;\s*$/, '')); }
+          catch (e) { allWarnings.push(`${evt.table} index skipped: ${e.message}`); }
+        }
+        onProgress?.(`> ${evt.table} (re-created${warnings.length ? `, ${warnings.length} warning(s)` : ''})`);
+        pendingTable = evt.table;
+        continue;
+      }
+      if (evt.op === 'row') {
+        const schema = schemas.get(evt.table);
+        if (!schema) throw new Error(`Row event for unknown table "${evt.table}"`);
+        if (pendingTable && pendingTable !== evt.table) await flushBatch();
+        pendingTable = evt.table;
+        const decoded = decodeRow(evt.values, schema.columns);
+        rowBatch.push(schema.columns.map((c) => normalizeForMysqlDriver(decoded[c.name])));
+        if (rowBatch.length >= BATCH) await flushBatch();
+      }
+    }
+    await flushBatch();
+    await c.query('SET FOREIGN_KEY_CHECKS=1');
+    onProgress?.(`Restore complete${allWarnings.length ? `: ${allWarnings.length} warning(s)` : ''}`);
+  } finally { await c.end(); }
+  return { ok: true, warnings: allWarnings };
+}
+
+function normalizeForMysqlDriver(v) {
+  if (v == null) return null;
+  if (v instanceof Date) return v;            // mysql2 handles Date natively
+  if (Buffer.isBuffer(v)) return v;
+  if (typeof v === 'object') return JSON.stringify(v);
+  if (typeof v === 'bigint') return v.toString();
+  return v;
+}
+
 module.exports = {
   type: 'mysql',
   testConnection,
@@ -420,4 +488,5 @@ module.exports = {
   parseTableNamesFromDump,
   getSchema,
   dumpNeutral,
+  restoreNeutral,
 };

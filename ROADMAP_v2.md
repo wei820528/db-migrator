@@ -34,7 +34,7 @@ v1 系列已收尾（7 adapter / plugin marketplace / online license / remote ki
 |---|---|---|
 | 1 | IR + type mapping + dialect emitter（含 lossy warnings） | ✓ done — 56 tests pass |
 | 2 | `getSchema(conn)` per adapter + neutral JSONL dump + value encoder | ✓ done — 25 tests (4 skip 需 npm install) |
-| 3 | Cross-DB restore（讀 neutral JSONL，emit target dialect） | pending |
+| 3 | `tables.js` + `restoreNeutral` per adapter（parameterized INSERT，無 escaping） | ✓ done — 26 tests (3 skip 需 npm install) |
 | 4 | Dry-run preview UI | pending |
 | 5 | Integration matrix（6 方向 round-trip） | pending |
 

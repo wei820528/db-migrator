@@ -3,8 +3,9 @@ const { Client } = require('pg');
 const QueryStream = require('pg-query-stream');
 const { escapeIdent, escapeStringSql, formatValueGeneric, splitSqlStatements, parseTableNamesFromDumpGeneric, extractRoutineBlocks, ROUTINE_BEGIN, ROUTINE_END } = require('./_shared');
 const { normalize } = require('../lib/cross-db');
-const { NeutralWriter } = require('../lib/cross-db/format');
-const { encodeRow } = require('../lib/cross-db/encode');
+const { NeutralWriter, readNeutral } = require('../lib/cross-db/format');
+const { encodeRow, decodeRow } = require('../lib/cross-db/encode');
+const { buildCreateTable, buildCreateIndexes } = require('../lib/cross-db/tables');
 
 function buildClient(c) {
   return new Client({
@@ -466,4 +467,78 @@ async function dumpNeutral(conn, options, outFilePath, onProgress) {
   return { outFilePath };
 }
 
-module.exports = { type: 'postgres', testConnection, listTables, dump, restore, parseTableNamesFromDump, getSchema, dumpNeutral };
+async function restoreNeutral(conn, neutralPath, onProgress) {
+  const c = buildClient(conn);
+  await c.connect();
+  const schemas = new Map();
+  const allWarnings = [];
+  const BATCH = 500;
+
+  try {
+    let rowBatch = [];
+    let pendingTable = null;
+
+    async function flushBatch() {
+      if (!pendingTable || rowBatch.length === 0) return;
+      const schema = schemas.get(pendingTable);
+      const colNames = schema.columns.map((c) => c.name);
+      const cols = colNames.map(ident).join(',');
+      // Build $1, $2, ... per row with running counter
+      const rowsSql = [];
+      const flat = [];
+      let p = 1;
+      for (const row of rowBatch) {
+        const phs = row.map(() => '$' + (p++));
+        rowsSql.push('(' + phs.join(',') + ')');
+        flat.push(...row);
+      }
+      await c.query(`INSERT INTO ${ident(pendingTable)} (${cols}) VALUES ${rowsSql.join(',')}`, flat);
+      rowBatch = [];
+    }
+
+    for await (const evt of readNeutral(neutralPath)) {
+      if (evt.op === 'header') {
+        onProgress?.(`Source: ${evt.sourceDialect} ${evt.db} (${evt.tables?.length ?? '?'} table(s))`);
+        continue;
+      }
+      if (evt.op === 'schema') {
+        await flushBatch();
+        schemas.set(evt.table, evt);
+        const { sql, warnings } = buildCreateTable(evt, 'postgres');
+        allWarnings.push(...warnings);
+        await c.query(`DROP TABLE IF EXISTS ${ident(evt.table)} CASCADE`);
+        await c.query(sql);
+        for (const idxSql of buildCreateIndexes(evt, 'postgres')) {
+          try { await c.query(idxSql.replace(/;\s*$/, '')); }
+          catch (e) { allWarnings.push(`${evt.table} index skipped: ${e.message}`); }
+        }
+        onProgress?.(`> ${evt.table} (re-created${warnings.length ? `, ${warnings.length} warning(s)` : ''})`);
+        pendingTable = evt.table;
+        continue;
+      }
+      if (evt.op === 'row') {
+        const schema = schemas.get(evt.table);
+        if (!schema) throw new Error(`Row event for unknown table "${evt.table}"`);
+        if (pendingTable && pendingTable !== evt.table) await flushBatch();
+        pendingTable = evt.table;
+        const decoded = decodeRow(evt.values, schema.columns);
+        rowBatch.push(schema.columns.map((col) => normalizeForPgDriver(decoded[col.name], col.type)));
+        if (rowBatch.length >= BATCH) await flushBatch();
+      }
+    }
+    await flushBatch();
+    onProgress?.(`Restore complete${allWarnings.length ? `: ${allWarnings.length} warning(s)` : ''}`);
+  } finally { await c.end(); }
+  return { ok: true, warnings: allWarnings };
+}
+
+function normalizeForPgDriver(v, irType) {
+  if (v == null) return null;
+  if (v instanceof Date) return v;             // pg driver handles Date
+  if (Buffer.isBuffer(v)) return v;            // pg accepts Buffer for bytea
+  if (irType?.kind === 'json' && typeof v === 'object') return JSON.stringify(v);
+  if (typeof v === 'bigint') return v.toString();
+  return v;
+}
+
+module.exports = { type: 'postgres', testConnection, listTables, dump, restore, parseTableNamesFromDump, getSchema, dumpNeutral, restoreNeutral };

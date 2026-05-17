@@ -2,8 +2,9 @@ const fs = require('fs');
 const Database = require('better-sqlite3');
 const { escapeIdent, formatValueGeneric, splitSqlStatements, parseTableNamesFromDumpGeneric } = require('./_shared');
 const { normalize } = require('../lib/cross-db');
-const { NeutralWriter } = require('../lib/cross-db/format');
-const { encodeRow } = require('../lib/cross-db/encode');
+const { NeutralWriter, readNeutral } = require('../lib/cross-db/format');
+const { encodeRow, decodeRow } = require('../lib/cross-db/encode');
+const { buildCreateTable, buildCreateIndexes } = require('../lib/cross-db/tables');
 
 // SQLite "connection" is just a file path. We accept conn.path (preferred) or conn.database / conn.host as fallbacks.
 function pickPath(c) {
@@ -239,4 +240,77 @@ async function dumpNeutral(conn, options, outFilePath, onProgress) {
   return { outFilePath };
 }
 
-module.exports = { type: 'sqlite', testConnection, listTables, dump, restore, parseTableNamesFromDump, getSchema, dumpNeutral };
+// Restore from a neutral JSONL dump produced by ANY source adapter.
+// Reads schema events → emits CREATE TABLE + CREATE INDEX in SQLite dialect,
+// then row events → parameterized INSERTs.
+async function restoreNeutral(conn, neutralPath, onProgress) {
+  const p = pickPath(conn);
+  if (!p) throw new Error('SQLite needs a file path');
+  const db = new Database(p);
+  const schemas = new Map();              // table name → IR schema event
+  const inserters = new Map();            // table name → cached prepared INSERT
+  const allWarnings = [];
+
+  try {
+    db.exec('PRAGMA foreign_keys=OFF; BEGIN TRANSACTION;');
+    try {
+      let rowCount = 0;
+      for await (const evt of readNeutral(neutralPath)) {
+        if (evt.op === 'header') {
+          onProgress?.(`Source: ${evt.sourceDialect} ${evt.db} (${evt.tables?.length ?? '?'} table(s))`);
+          continue;
+        }
+        if (evt.op === 'schema') {
+          schemas.set(evt.table, evt);
+          const { sql, warnings } = buildCreateTable(evt, 'sqlite');
+          allWarnings.push(...warnings);
+          db.exec(`DROP TABLE IF EXISTS ${ident(evt.table)};`);
+          db.exec(sql + ';');
+          for (const idx of buildCreateIndexes(evt, 'sqlite')) {
+            try { db.exec(idx); }
+            catch (e) { allWarnings.push(`${evt.table} index skipped: ${e.message}`); }
+          }
+          onProgress?.(`> ${evt.table} (re-created${warnings.length ? `, ${warnings.length} warning(s)` : ''})`);
+          continue;
+        }
+        if (evt.op === 'row') {
+          const schema = schemas.get(evt.table);
+          if (!schema) throw new Error(`Row event for unknown table "${evt.table}" — schema event missing`);
+          const colNames = schema.columns.map((c) => c.name);
+          let insert = inserters.get(evt.table);
+          if (!insert) {
+            const sql = `INSERT INTO ${ident(evt.table)} (${colNames.map(ident).join(',')}) VALUES (${colNames.map(() => '?').join(',')})`;
+            insert = db.prepare(sql);
+            inserters.set(evt.table, insert);
+          }
+          const decoded = decodeRow(evt.values, schema.columns);
+          // better-sqlite3 doesn't accept Buffer; pass raw bytes
+          const vals = colNames.map((n) => {
+            const v = decoded[n];
+            if (v == null) return null;
+            if (Buffer.isBuffer(v)) return v;
+            if (v instanceof Date) return v.toISOString();
+            if (typeof v === 'object') return JSON.stringify(v);
+            if (typeof v === 'boolean') return v ? 1 : 0;
+            if (typeof v === 'bigint') return v;
+            return v;
+          });
+          insert.run(...vals);
+          rowCount++;
+          if (rowCount % 5000 === 0) onProgress?.(`  ${rowCount} rows inserted`);
+        }
+      }
+      db.exec('COMMIT;');
+      onProgress?.(`Restore complete: ${schemas.size} table(s), ${rowCount} row(s)${allWarnings.length ? `, ${allWarnings.length} warning(s)` : ''}`);
+    } catch (e) {
+      db.exec('ROLLBACK;');
+      throw e;
+    }
+  } finally {
+    db.exec('PRAGMA foreign_keys=ON;');
+    db.close();
+  }
+  return { ok: true, warnings: allWarnings };
+}
+
+module.exports = { type: 'sqlite', testConnection, listTables, dump, restore, parseTableNamesFromDump, getSchema, dumpNeutral, restoreNeutral };
