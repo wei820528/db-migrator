@@ -118,6 +118,44 @@
         <p id="pw-msg" class="msg"></p>
       </form>
     </div>
+
+    <!-- API Tokens (v2 Theme C Phase 2) -->
+    <div class="card">
+      <h2>API Tokens <span class="muted" id="tok-count"></span></h2>
+      <p class="muted" style="font-size:13px;">
+        給 cron / CI / scripts 用的長期 token。建立後 <b>只會顯示一次</b>，請立刻複製到 secret store。
+        Token 形如 <code>dbmt_…</code>，prefix 設計成可被 leak detection scanner 抓到。
+      </p>
+
+      <form id="tok-form" style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin:10px 0;">
+        <label style="flex:1; min-width:200px;">名稱
+          <input id="tok-name" placeholder="例：github-actions-prod" maxlength="64" required />
+        </label>
+        <label>過期天數
+          <input id="tok-days" type="number" min="1" max="3650" placeholder="留空 = 永不過期" style="width:140px;" />
+        </label>
+        <label style="display:flex; gap:10px; align-items:center;">
+          <label class="checkbox"><input type="checkbox" id="tok-s-read" checked /> user:read</label>
+          <label class="checkbox"><input type="checkbox" id="tok-s-write" checked /> user:write</label>
+        </label>
+        <button type="submit" class="btn-primary">建立 token</button>
+      </form>
+
+      <div id="tok-new" hidden style="background:#fef3c7; border:1px solid #f59e0b; padding:12px; border-radius:6px; margin:10px 0;">
+        <b>請立刻複製：</b><br>
+        <code id="tok-new-value" style="display:block; padding:8px; background:white; margin:6px 0; word-break:break-all;"></code>
+        <button type="button" id="tok-copy" class="btn-ghost">複製</button>
+        <button type="button" id="tok-dismiss" class="btn-ghost">我已存好</button>
+      </div>
+
+      <table class="data-table" id="tok-list" style="margin-top:8px;">
+        <thead><tr>
+          <th>名稱</th><th>Prefix</th><th>Scopes</th><th>建立</th><th>過期</th><th>最後使用</th><th>狀態</th><th>動作</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <p id="tok-msg" class="msg"></p>
+    </div>
   </main>
 </div>
 

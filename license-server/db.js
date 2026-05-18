@@ -60,9 +60,30 @@ CREATE TABLE IF NOT EXISTS issued_licenses (
   notes TEXT
 );
 
+-- v2 Theme C Phase 2: long-running API tokens for cron / CI / scripts.
+-- Token format: 'dbmt_<32-byte url-safe random>'. Only the SHA-256 of the token
+-- is stored (random + high-entropy, no bcrypt needed). Prefix is kept visible
+-- so the user can recognise the token in their secret store.
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id TEXT PRIMARY KEY,               -- UUID
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,                -- human label e.g. 'github-actions-prod'
+  token_prefix TEXT NOT NULL,        -- first 12 chars of token (display only — not secret)
+  token_hash TEXT NOT NULL UNIQUE,   -- SHA-256 hex of the full token
+  scopes TEXT NOT NULL,              -- JSON array, e.g. ["user:read","user:write"]
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME,               -- NULL = never expires
+  revoked_at DATETIME,
+  last_used_at DATETIME,
+  last_used_ip TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_events_user ON event_log(user_id, at);
 CREATE INDEX IF NOT EXISTS idx_licenses_revoked ON issued_licenses(revoked_at);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
 `);
 
 // Idempotent column additions (better-sqlite3 throws if column exists; catch and ignore)

@@ -141,6 +141,7 @@ async function loadAll() {
   await loadSessions();
   await loadPlans();
   await refreshTotpUI();
+  await loadTokens();
 }
 
 // ============ 2FA ============
@@ -352,4 +353,90 @@ $('#pw-form').addEventListener('submit', async (e) => {
     msg.textContent = '✓ 已變更';
     $('#pw-form').reset();
   } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+});
+
+// ============== API Tokens（v2 Theme C Phase 2） ==============
+async function loadTokens() {
+  try {
+    const r = await api('GET', '/api/user/tokens');
+    $('#tok-count').textContent = `(${r.tokens.length})`;
+    const tb = $('#tok-list tbody');
+    if (r.tokens.length === 0) {
+      tb.innerHTML = '<tr><td colspan="8" style="color:#9ca3af; text-align:center;">尚未建立 API token</td></tr>';
+      return;
+    }
+    tb.innerHTML = r.tokens.map((t) => `
+      <tr>
+        <td><b>${escapeHtml(t.name)}</b></td>
+        <td><code>${escapeHtml(t.token_prefix)}</code></td>
+        <td><small>${escapeHtml((t.scopes || []).join(', '))}</small></td>
+        <td><small>${fmtDate(t.created_at)}</small></td>
+        <td><small>${t.expires_at ? fmtDate(t.expires_at) : '永不'}</small></td>
+        <td><small>${t.last_used_at ? fmtRelative(t.last_used_at) + (t.last_used_ip ? ` from ${escapeHtml(t.last_used_ip)}` : '') : '從未'}</small></td>
+        <td>${stateBadge(t.state)}</td>
+        <td>${t.state === 'active'
+          ? `<button class="btn-ghost" data-revoke="${escapeHtml(t.id)}" style="font-size:12px;">撤銷</button>`
+          : ''}</td>
+      </tr>
+    `).join('');
+  } catch (e) { console.error('loadTokens', e); }
+}
+
+function stateBadge(state) {
+  const map = {
+    active:  '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:4px;font-size:12px;">active</span>',
+    revoked: '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:4px;font-size:12px;">revoked</span>',
+    expired: '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:4px;font-size:12px;">expired</span>',
+  };
+  return map[state] || state;
+}
+
+$('#tok-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = $('#tok-msg');
+  msg.className = 'msg';
+  const scopes = [
+    $('#tok-s-read').checked && 'user:read',
+    $('#tok-s-write').checked && 'user:write',
+  ].filter(Boolean);
+  if (scopes.length === 0) { msg.className = 'msg err'; msg.textContent = '至少要勾一個 scope'; return; }
+  const days = $('#tok-days').value ? Number($('#tok-days').value) : undefined;
+  try {
+    const r = await api('POST', '/api/user/tokens', {
+      name: $('#tok-name').value.trim(),
+      scopes,
+      expiresInDays: days,
+    });
+    $('#tok-new').hidden = false;
+    $('#tok-new-value').textContent = r.token;
+    $('#tok-form').reset();
+    $('#tok-s-read').checked = true;
+    $('#tok-s-write').checked = true;
+    msg.className = '';
+    msg.textContent = '';
+    await loadTokens();
+  } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+});
+
+$('#tok-copy').addEventListener('click', () => {
+  const v = $('#tok-new-value').textContent;
+  navigator.clipboard.writeText(v).then(() => {
+    $('#tok-copy').textContent = '✓ 已複製';
+    setTimeout(() => { $('#tok-copy').textContent = '複製'; }, 1500);
+  }).catch(() => {});
+});
+
+$('#tok-dismiss').addEventListener('click', () => {
+  $('#tok-new').hidden = true;
+  $('#tok-new-value').textContent = '';
+});
+
+$('#tok-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-revoke]');
+  if (!btn) return;
+  if (!confirm('撤銷此 token？使用中的 script 會立刻失敗。')) return;
+  try {
+    await api('DELETE', '/api/user/tokens/' + encodeURIComponent(btn.dataset.revoke));
+    await loadTokens();
+  } catch (e) { alert(e.message); }
 });
