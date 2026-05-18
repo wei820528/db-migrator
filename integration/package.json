@@ -8,7 +8,8 @@
     "down": "docker compose down -v",
     "test": "node run.js",
     "test:sql": "node run.js mysql postgres mssql sqlite",
-    "test:nosql": "node run.js mongo redis"
+    "test:nosql": "node run.js mongo redis",
+    "test:crossdb": "node run-crossdb.js"
   },
   "engines": { "node": ">=18" }
 }

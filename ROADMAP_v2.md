@@ -35,11 +35,13 @@ v1 系列已收尾（7 adapter / plugin marketplace / online license / remote ki
 | 1 | IR + type mapping + dialect emitter（含 lossy warnings） | ✓ done — 56 tests pass |
 | 2 | `getSchema(conn)` per adapter + neutral JSONL dump + value encoder | ✓ done — 25 tests (4 skip 需 npm install) |
 | 3 | `tables.js` + `restoreNeutral` per adapter（parameterized INSERT，無 escaping） | ✓ done — 26 tests (3 skip 需 npm install) |
-| 4 | Dry-run preview UI | pending |
-| 5 | Integration matrix（6 方向 round-trip） | pending |
+| 4 | Dry-run preview UI + `/api/cross-db/preview-live` + 跨 DB tab | ✓ done — 13 tests + UI |
+| 5 | Integration matrix（6 方向 e2e round-trip + CI） | ✓ done — `integration/run-crossdb.js` |
 
 **主要受眾**：真的要把 DB 從 MySQL 搬到 PG 的人。**契合專案名字** — 叫 "DB Migrator" 結果只做 same-DB 有點怪。
 **最大風險**：型別組合爆炸；可能要限制成「MySQL ↔ PG ↔ SQLite」三角，先不碰 MSSQL。
+
+**狀態**：✓ **完成** — Phase 1-5 全收尾、120 個 unit test、6 個 e2e 方向 CI 自動跑。下一輪可考慮：(a) MSSQL 加進三角變四角 (b) FK 跨 DB 保留（要做 deferred constraint emission）(c) cross-DB live migration 一鍵執行 endpoint（目前只有 preview）。
 
 ---
 

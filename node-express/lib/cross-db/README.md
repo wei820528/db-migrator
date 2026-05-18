@@ -23,7 +23,7 @@ later is one parser + one emitter, not N² translators.
 | 4b | `POST /api/cross-db/preview-live` route + `buildTablePreview` helper | done |
 | 4c | UI: 跨 DB 遷移 tab + per-table preview cards + warnings inline | done |
 | 4d | Tests for preview helper + HTTP route validation | done |
-| 5  | Integration matrix (6 directions) | pending |
+| 5  | Integration matrix (6 directions) | done — `integration/run-crossdb.js`，CI 自動跑 |
 
 ## IR shape
 

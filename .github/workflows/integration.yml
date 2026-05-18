@@ -51,9 +51,13 @@ jobs:
         # has its own waitFor() per adapter so this is a courtesy pause.
         run: sleep 20
 
-      - name: Run round-trips
+      - name: Run same-DB round-trips
         working-directory: integration
         run: node run.js
+
+      - name: Run cross-DB matrix (v2 Theme B — 6 directions)
+        working-directory: integration
+        run: node run-crossdb.js
 
       - name: Upload dumps on failure
         if: failure()
