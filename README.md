@@ -6,12 +6,15 @@
 
 ```
 匯出資料庫的bat/
-├── node-express/    Node.js 18+ / Express        (客戶端 DB Migrator)
-├── dotnet8/         .NET 8 / ASP.NET Core         (客戶端 DB Migrator)
-├── license-server/  Node.js / SQLite              (你架在 VPS / 本機；含 Admin Web UI + Stripe + 綠界 + 2FA)
-├── license-tools/   (私用) Ed25519 簽 offline license / sign plugin
-├── integration/     docker-compose × 6 DB        (real round-trip tests)
-└── 文件/             12 份中文 HTML 文件
+├── node-express/         Node.js 18+ / Express     (客戶端 DB Migrator)
+├── dotnet8/              .NET 8 / ASP.NET Core      (客戶端 DB Migrator)
+├── license-server/       Node.js / SQLite           (你架在 VPS / 本機；Admin Web UI + Stripe + 綠界 + 2FA + API tokens)
+├── license-tools/        (私用) Ed25519 簽 offline license / sign plugin
+├── cli/                  dbmigrator 命令列工具       (v1.2.0 — cron / CI friendly，純 Node 零外部 deps)
+├── action.yml            GitHub Action 入口         (v1.2.0 — composite action，CI 一行接管備份/還原)
+├── examples/             配置範例                   (github-actions/* 三個 ready-to-use workflow)
+├── integration/          docker-compose × 6 DB     (real round-trip + cross-DB matrix tests)
+└── 文件/                 12 份中文 HTML 文件
 ```
 
 兩個 client 版本功能完全一樣，前端 UI 共用，差別只在後端語言。
@@ -31,6 +34,12 @@
 | Plugin marketplace | 從 GitHub URL 一鍵裝；SHA-256 + Ed25519 簽章驗證；trusted-publishers 白名單 |
 | 失敗隔離 | 任一 module / adapter / plugin 壞掉只影響自己 |
 | 互動指引 | 第一次開頁自動跳教學 |
+| **跨 DB 遷移** (v1.2.0) | MySQL ↔ PostgreSQL ↔ SQLite；dry-run preview 看 lossy translations；6 個方向 e2e CI 自動驗 |
+| **`dbmigrator` CLI** (v1.2.0) | 8 個 subcommand，純 Node 零外部 deps，給 cron / CI / scripts 用 |
+| **GitHub Action** (v1.2.0) | `uses: wei820528/db-migrator@v2`，一行接管備份 / 還原 / preview |
+| **API tokens** (v1.2.0) | `dbmt_…` 長期 token，portal 自助管理，scope 控制 |
+| **HMAC webhooks** (v1.2.0) | job done / failed / schedule 事件 POST 通知，自動 retry |
+| **OpenAPI 3.0** (v1.2.0) | 兩個 server 各 `/api-docs/` 互動 Swagger UI |
 
 ## 商業 / 授權功能（License Server）
 
@@ -79,11 +88,15 @@ dotnet run
 ## 自動測試
 
 ```powershell
-cd node-express && npm test       # 87 個 unit test
-cd license-server && npm test     # 55 個（含 14 個 TOTP + revocation 在 npm install 後跑）
+cd node-express && npm test       # 240 個 unit test (229 pass + 11 skip 需 npm install)
+cd cli && npm test                # 41 個（CLI v1.2.0）
+cd license-server && npm test     # 74 個（含 21 個需 npm install）
 
-# Real-DB integration round-trip（需要 Docker）
-cd integration && npm run up && npm test && npm run down
+# Real-DB integration（需要 Docker）
+cd integration && npm run up
+npm test                          # 同 DB round-trip × 6 adapter
+npm run test:crossdb              # 跨 DB matrix × 6 方向
+npm run down
 ```
 
 > Unit test 用 Node 18+ 內建 `node:test`，零 framework 依賴。
@@ -131,9 +144,12 @@ cd integration && npm run up && npm test && npm run down
 ├── .github/              ← Issue / PR templates + CI matrix
 ├── node-express/         ← Node 版完整原始碼
 ├── dotnet8/              ← .NET 8 版完整原始碼
-├── license-server/       ← License Server（含 admin UI / portal）
+├── license-server/       ← License Server（含 admin UI / portal / API tokens）
 ├── license-tools/        ← (私用) 產生 offline license 的 Ed25519 工具 + plugin signer
-├── integration/          ← docker-compose 真實 DB round-trip 測試
+├── cli/                  ← dbmigrator 命令列工具（v1.2.0）
+├── action.yml            ← GitHub Action 入口（v1.2.0）
+├── examples/             ← workflow 配置範例
+├── integration/          ← docker-compose 真實 DB round-trip 測試（含跨 DB matrix）
 └── 文件/                  ← 12 份頂層中文 HTML 文件
 ```
 

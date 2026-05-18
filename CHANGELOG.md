@@ -12,6 +12,44 @@ All notable changes to this project will be documented in this file.
 
 (no pending changes)
 
+## [1.2.0] - 2026-05-18
+
+v2 Theme B + Theme C 收尾：跨 DB 遷移管線（mysql ↔ postgres ↔ sqlite 6 個方向 e2e）+ 完整 automation 套件（CLI / API tokens / OpenAPI / webhook / GitHub Action）。Node unit test 87 → 240；CLI 全新 41 tests；License-server pure 34 → 53。
+
+### Added — Cross-DB migration (v2 Theme B)
+
+- **IR + dialect emitter**（[lib/cross-db/](node-express/lib/cross-db/)）：12 種 normalized `kind`（int / float / decimal / string / text / binary / bool / date / datetime / time / json / uuid / enum + unknown 兜底）；`normalize(dialect, src) → IR`、`emit(IR, target) → {sql, warnings}`；lossy 一律 warn 不 throw（PG 拓寬 unsigned int、SQLite 丟 sign、JSON → TEXT 等）
+- **Neutral JSONL dump format**（neutral-v1）：3 種 event（header / schema / row），value 編碼 schema-guided 不用 `$type` wrapper（避免跟 JSON column 內容衝突）；BigInt safe-range / Date ISO / Buffer base64 / decimal 字串都涵蓋
+- **Per-adapter `getSchema(conn)` + `dumpNeutral` + `restoreNeutral`**：mysql / postgres / sqlite 三個；restore 用 parameterized INSERT（不用自寫 escape）；auto-increment 在三個方言都正確（mysql AUTO_INCREMENT / pg SERIAL / sqlite INTEGER PRIMARY KEY AUTOINCREMENT）
+- **`tables.js`**：IR table → target-dialect `CREATE TABLE` + `CREATE INDEX`，PK 隱含 NOT NULL（標準 SQL），SQLite 單欄 PK 自動 inline
+- **Dry-run preview**：`POST /api/cross-db/preview-live`、UI 新「跨 DB 遷移」tab，per-table 卡片含 column 對映表 + 摺疊 DDL + warnings inline
+- **Integration matrix**：`integration/run-crossdb.js` 跑 6 個方向 e2e round-trip（docker-compose × MySQL 8.4 / PG 16 / SQLite）；CI workflow 自動跑
+
+### Added — Automation (v2 Theme C)
+
+- **`dbmigrator` CLI**（[cli/](cli/)）：8 個 subcommand（test / list-dbs / list-tables / export / import / dump-neutral / restore-neutral / preview-crossdb）；純 Node script 零外部 deps；`--password-env` 優於 `--password` 避免 shell history 洩漏；`--json` machine-readable 模式；`--config <file.json>` 一份設定多個指令共用
+- **Long-running API tokens**：`dbmt_<random>` GitHub-PAT 風格，SHA-256 hash 儲存；scope guard（user:read / user:write）；token-chain 防護（用 API token 不能再建 / 撤新 token）；portal UI 自助管理 + `last_used_at` / `last_used_ip` 追蹤
+- **OpenAPI 3.0 specs**：兩個 server 各自一份 `openapi.json`（手寫 + spec ↔ route 漂移 test），CDN-loaded Swagger UI at `/api-docs/`（無 npm 新增 dep）
+- **HMAC-signed webhook delivery**：5 種 event（job.done / job.failed / schedule.run.{ok,failed} / license.expired）+ ping；secret 加密儲存 (AES-256-GCM)；HMAC-SHA256 簽 body，header `X-DBMigrator-Signature: sha256=...`；3 次 retry（0 / 2 / 10s 間隔）；test-ping 按鈕；UI 顯示最後狀態 + error sample
+- **GitHub Action** at repo root（[action.yml](action.yml)）：composite action 包 CLI，password 自動走 env 不落到 command line；3 個 ready-to-use workflow templates（[examples/github-actions/](examples/github-actions/)）— daily backup、cross-DB preview on PR、restore on tag
+
+### Changed
+
+- License-server `routes/user.js` 的 `currentUser()` 現在同時接受 session bearer 跟 `dbmt_` API token，自動觸發 `last_used_at` 更新
+- Adapter `getSchema` 每個 column 加 `sourceTypeRaw`（保留 dialect 原始字串，給 UI preview 顯示用）
+
+### Fixed
+
+- Cross-DB Phase 1 開發時抓到的 normalizeMySql 把 ENUM 值大小寫毀掉的 bug（`toUpperCase()` 蓋過 enum literal）— 改成從原始 src 拉 values
+- Phase 3 開發時抓到的 tables.js dialect alias 不一致 — `'pg'` / `'supabase'` 不會 normalize 成 `'postgres'`，導致 PG SERIAL 多了 NOT NULL；加 `normalizeTarget()` 統一
+
+### Docs
+
+- **繁體中文註解翻譯**：v2 Theme B 所有新檔（lib/cross-db/* + adapter cross-db sections + routes + UI module）；保留 warning / log / error 訊息用英文（machine-greppable）
+- ROADMAP_v2.md：Themes B + C 標 ✓ 完成；Themes A / D / E 仍 pending
+- 新增 [examples/github-actions/README.md](examples/github-actions/README.md)
+- 兩份 OpenAPI spec 都可在 `/api-docs/` 互動瀏覽 + Try It Out
+
 ## [1.1.0] - 2026-05-18
 
 P3 全數收尾：兩個新 adapter、一個 plugin 商店、licence 遠端撤銷、DDL 大補、real-DB integration 測試。Node unit test 從 37 → 87；License-server 49 → 55。
@@ -157,7 +195,8 @@ P3 全數收尾：兩個新 adapter、一個 plugin 商店、licence 遠端撤�
 - PolyForm Free Trial 1.0.0 授權 + Ed25519 license key 機制
 - 商業條款（COMMERCIAL.md / CONTRIBUTING.md / SECURITY.md）
 
-[Unreleased]: https://github.com/wei820528/db-migrator/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/wei820528/db-migrator/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/wei820528/db-migrator/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/wei820528/db-migrator/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/wei820528/db-migrator/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/wei820528/db-migrator/releases/tag/v0.1.0
