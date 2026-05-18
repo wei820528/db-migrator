@@ -71,7 +71,7 @@ v1 系列已收尾（7 adapter / plugin marketplace / online license / remote ki
 | Phase | 子項 | 狀態 |
 |---|---|---|
 | 1 | Capability manifest（11 種 permission）+ marketplace UI 知情同意 + signer 驗 + `.granted-permissions.json` | ✓ done — 18 tests |
-| 2 | worker_thread 隔離 + SDK ctx（`ctx.db`, `ctx.route`, `ctx.log` 等） | pending — 大 |
+| 2 | worker_thread 隔離 + SDK ctx + route MVP（崩潰隔離、event loop 隔離） | ✓ done — 14 tests |
 | 3 | Per-permission runtime enforcement（攔 `require('fs')` / network / DB calls） | pending |
 | 4 | Audit log（每次敏感 API call 進 event log） | pending |
 | 5 | Migration / compat（legacy plugin 自動 grandfather 成 `unrestricted`） | partial — 偵測在 Phase 1，warn flag legacy=true |
@@ -79,7 +79,7 @@ v1 系列已收尾（7 adapter / plugin marketplace / online license / remote ki
 **主要受眾**：開放 plugin marketplace 給第三方時的安全護欄。
 **最大風險**：Node 沒有真正的 sandbox（vm2 deprecated, isolated-vm 難用），worker thread 也只是 process 內隔離。要做就是大工程。
 
-**狀態**：Phase 1 done — Plugin 不會被偷偷裝、user 一定知道在 grant 什麼；但 runtime 沒擋（Phase 2-3 才會）。已經比之前進步：拿到 informed consent + audit trail。
+**狀態**：Phase 1+2 done — manifest `sandboxed: true` 的 plugin 跑在 worker_thread，handler 崩潰 / process.exit 都不會 take down main thread；唯一對外 API 是傳入的 ctx 物件（route + log）。但 worker 內仍能 `require('fs')` —真正 OS-level sandbox 留 Phase 3+。Sample 在 [plugins/sandboxed-hello/](node-express/plugins/sandboxed-hello/)。
 
 ---
 

@@ -17,6 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const adapters = require('../adapters');
+const SandboxedPlugin = require('./sandboxed-plugin-host');
 
 class PluginHost {
   constructor(app, pluginsDir) {
@@ -56,6 +57,12 @@ class PluginHost {
     if (!modulePath) {
       this.unload(name);
       return;
+    }
+
+    // v2 Theme D Phase 2: 讀 manifest 判斷是否走 sandboxed 路徑
+    const manifest = this._readManifest(name);
+    if (manifest?.sandboxed === true) {
+      return this._loadSandboxed(name, modulePath, manifest);
     }
 
     // Invalidate require cache for this plugin and any children inside its folder
@@ -131,6 +138,10 @@ class PluginHost {
     const existing = this.plugins.get(name);
     if (!existing) return;
     if (existing.adapterType) adapters.unregisterAdapter(existing.adapterType);
+    // Sandboxed plugin: 把 worker 停掉
+    if (existing.sandboxedInstance) {
+      existing.sandboxedInstance.stop().catch(() => {});
+    }
     if (existing.mount && this.routeProxies.has(existing.mount)) {
       // We can't truly unmount in Express; replace with 503
       this.routeProxies.get(existing.mount)._holder.router =
@@ -147,6 +158,81 @@ class PluginHost {
     for (const cached of Object.keys(require.cache)) {
       if (cached.startsWith(fileBase)) delete require.cache[cached];
     }
+  }
+
+  // ============ v2 Theme D Phase 2: sandboxed plugin support ============
+
+  _readManifest(name) {
+    const root = this.pluginRoot(name);
+    if (!root) return null;
+    const mf = path.join(root, 'plugin.json');
+    if (!fs.existsSync(mf)) return null;
+    try { return JSON.parse(fs.readFileSync(mf, 'utf8')); }
+    catch { return null; }
+  }
+
+  _readGrants(name) {
+    const root = this.pluginRoot(name);
+    if (!root) return null;
+    const g = path.join(root, '.granted-permissions.json');
+    if (!fs.existsSync(g)) return null;
+    try { return JSON.parse(fs.readFileSync(g, 'utf8')); }
+    catch { return null; }
+  }
+
+  async _loadSandboxed(name, modulePath, manifest) {
+    // 先停掉之前的 sandboxed instance（若有）
+    const existing = this.plugins.get(name);
+    if (existing?.sandboxedInstance) {
+      try { await existing.sandboxedInstance.stop(); } catch {}
+    }
+
+    const grants = this._readGrants(name);
+    const grantedPermissions = grants?.granted || manifest.permissions || [];
+
+    const sb = new SandboxedPlugin({
+      name,
+      pluginPath: modulePath,
+      grantedPermissions,
+      onLog: (level, msg) => console.log(`[plugin:${name}] ${level}: ${msg}`),
+    });
+
+    try {
+      await sb.start();
+    } catch (e) {
+      this.status[name] = { ok: false, error: 'sandbox start failed: ' + e.message, sandboxed: true };
+      console.error(`[plugin] ${name.padEnd(18)} FAIL (sandbox): ${e.message}`);
+      try { await sb.stop(); } catch {}
+      return;
+    }
+
+    // 把 sandbox 變成 Express handler 掛到 mount。mount 從 manifest 拿，
+    // 沒給就用 /api/plugin/<name>。
+    const mount = manifest.mount || `/api/plugin/${name}`;
+    const handler = sb.asExpressHandler();
+
+    let proxy = this.routeProxies.get(mount);
+    if (!proxy) {
+      const holder = { router: handler };
+      proxy = (req, res, next) => holder.router(req, res, next);
+      proxy._holder = holder;
+      this.routeProxies.set(mount, proxy);
+      this.app.use(mount, proxy);
+    } else {
+      proxy._holder.router = handler;
+    }
+
+    this.plugins.set(name, {
+      modulePath,
+      mount,
+      sandboxedInstance: sb,
+      ui: {},                       // Phase 2 不支援 sandboxed UI（留 Phase 3）
+    });
+    this.status[name] = {
+      ok: true, mount, source: 'plugin:sandboxed', sandboxed: true,
+      routes: sb.routes, permissions: grantedPermissions,
+    };
+    console.log(`[plugin] ${name.padEnd(18)} OK   ${mount} (sandboxed, ${sb.routes.length} route(s))`);
   }
 
   watch() {
