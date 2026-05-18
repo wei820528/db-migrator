@@ -21,6 +21,7 @@
     { "name": "Schedule",    "description": "排程備份" },
     { "name": "Marketplace", "description": "從 GitHub 一鍵裝 plugin" },
     { "name": "Cross-DB",    "description": "v2 Theme B — 跨 dialect 遷移預覽" },
+    { "name": "Webhooks",    "description": "v2 Theme C Phase 4 — HMAC-signed event delivery（job.done / job.failed / schedule.*）" },
     { "name": "Modules",     "description": "Adapter / route / plugin 健康狀態" }
   ],
   "components": {
@@ -336,6 +337,50 @@
         "responses": {
           "200": { "description": "{ source, target, tableCount, warningCount, tables: [...] }" },
           "400": { "description": "不支援的 dialect / source 與 target 相同" }
+        }
+      }
+    },
+    "/api/webhooks": {
+      "get": {
+        "tags": ["Webhooks"], "summary": "列出 webhooks + 所有可訂閱的事件",
+        "responses": { "200": { "description": "{ webhooks: [...], events: [...] }" } }
+      },
+      "post": {
+        "tags": ["Webhooks"], "summary": "建立 webhook",
+        "description": "Response 含 `secret`（whsec_…）— **僅此一次** 拿得到，請存到 secret store。\nReceiver 端驗章方式：`X-DBMigrator-Signature: sha256=<hex of HMAC-SHA256(secret, raw_body)>`。",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["name", "url", "events"],
+          "properties": {
+            "name":   { "type": "string", "maxLength": 64 },
+            "url":    { "type": "string", "format": "uri", "description": "http:// or https://" },
+            "events": { "type": "array", "items": { "type": "string" }, "description": "見 GET /api/webhooks 的 events 陣列。`*` 訂閱全部" }
+          }
+        } } } },
+        "responses": {
+          "200": { "description": "{ id, name, url, events, secret, secret_prefix }" },
+          "400": { "description": "URL / events 不合法" }
+        }
+      }
+    },
+    "/api/webhooks/{id}": {
+      "patch": {
+        "tags": ["Webhooks"], "summary": "更新（name / url / events / active）",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      },
+      "delete": {
+        "tags": ["Webhooks"], "summary": "刪除 webhook",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/webhooks/{id}/test": {
+      "post": {
+        "tags": ["Webhooks"], "summary": "Test-ping — 立刻送一個 `ping` 事件，方便驗收 receiver 是否能收到 + 驗章",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "{ ok, status, attempt } 或 { ok:false, error, attempts }" },
+          "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
     },

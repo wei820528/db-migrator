@@ -26,6 +26,7 @@ window.addEventListener('DOMContentLoaded', () => {
   D.schedule.init();
   D.marketplace.init();
   D.crossdb.init();
+  D.webhooks.init();
 
   // Plugin-contributed UI loaded last so plugin cards/tabs are added on top
   D.pluginUi.init();

@@ -51,6 +51,9 @@ node-express/jobs.db-shm
 node-express/schedules.db
 node-express/schedules.db-wal
 node-express/schedules.db-shm
+node-express/webhooks.db
+node-express/webhooks.db-wal
+node-express/webhooks.db-shm
 node-express/scheduled-backups/
 node-express/tmp/
 node-express/license.key

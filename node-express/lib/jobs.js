@@ -100,6 +100,22 @@ function setStatus(id, status, patch = {}) {
   values.push(Date.now());
   values.push(id);
   db.prepare(`UPDATE jobs SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+
+  // Webhook emit — terminal transitions only。Lazy-require 避免 cycle。
+  if (status === 'done' || status === 'error') {
+    try {
+      const wh = require('./webhooks');
+      const event = status === 'done' ? 'job.done' : 'job.failed';
+      const row = db.prepare('SELECT kind FROM jobs WHERE id = ?').get(id);
+      wh.emit(event, {
+        jobId: id,
+        kind: row?.kind,
+        status,
+        result: patch.result ?? null,
+        error: patch.error ?? null,
+      });
+    } catch (e) { /* webhooks module loading failed — non-fatal */ }
+  }
 }
 
 module.exports = { create, get, append, setStatus };
