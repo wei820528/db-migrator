@@ -40,6 +40,31 @@ if (!manifest.name || !manifest.version || !manifest.files) {
   process.exit(1);
 }
 
+// v2 Theme D Phase 1：驗證 permissions 欄位（若有宣告）
+// Known permissions 列表跟 node-express/lib/plugin-permissions.js 同步
+const KNOWN_PERMISSIONS = new Set([
+  'route', 'ui:cards', 'ui:tabs', 'static', 'adapter',
+  'db:read', 'db:write',
+  'fs:tmp', 'fs:plugin-dir', 'network',
+  'unrestricted',
+]);
+if (manifest.permissions !== undefined) {
+  if (!Array.isArray(manifest.permissions) || manifest.permissions.length === 0) {
+    console.error('manifest.permissions must be a non-empty array (or omit the field for legacy unrestricted)');
+    process.exit(1);
+  }
+  for (const p of manifest.permissions) {
+    if (!KNOWN_PERMISSIONS.has(p)) {
+      console.error(`Unknown permission "${p}". Known: ${[...KNOWN_PERMISSIONS].join(', ')}`);
+      process.exit(1);
+    }
+  }
+  console.log(`✓ permissions: ${manifest.permissions.join(', ')}`);
+} else {
+  console.warn('⚠ no `permissions` field declared — plugin will be installed as `unrestricted` (legacy).');
+  console.warn('  Add `"permissions": ["route", ...]` to your plugin.json so users see what they\'re granting.');
+}
+
 // Hash every file under manifest.files (object keyed by runtime: 'node-express' / 'dotnet8' / 'shared')
 const hashes = {};
 for (const [runtime, files] of Object.entries(manifest.files)) {

@@ -1,0 +1,17 @@
+{
+  "name": "hello",
+  "version": "1.0.0",
+  "description": "範例 plugin — 示範 route / adapter / UI cards & tabs / static assets 四種能力 + v2 Theme D permission 宣告。",
+  "author": "DB Migrator team",
+  "files": {
+    "node-express": ["index.js", "public/init.js"]
+  },
+  "permissions": [
+    "route",
+    "adapter",
+    "ui:cards",
+    "ui:tabs",
+    "static"
+  ],
+  "_note": "本檔是給 marketplace 安裝流程示範用的格式。本機 plugins/hello/ 透過 pluginHost 直接 require()，不會走 marketplace 驗章/權限同意流程。實際發佈到 GitHub 給人裝時才需要這份 manifest（搭配 license-tools/sign-plugin.js 簽過）。"
+}

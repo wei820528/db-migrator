@@ -293,20 +293,28 @@
     "/api/marketplace/install": {
       "post": {
         "tags": ["Marketplace"], "summary": "安裝 plugin（atomic：staging dir → rename）",
+        "description": "v2 Theme D Phase 1: 可選 `grantedPermissions` 是 user 同意的 subset；省略則 default 全部 grant。Granted set 寫到 `<plugin>/.granted-permissions.json`。",
         "requestBody": { "required": true, "content": { "application/json": { "schema": {
           "type": "object", "required": ["url"],
           "properties": {
-            "url":            { "type": "string", "format": "uri" },
-            "allowUnsigned":  { "type": "boolean", "default": false }
+            "url":                { "type": "string", "format": "uri" },
+            "allowUnsigned":      { "type": "boolean", "default": false },
+            "grantedPermissions": { "type": "array", "items": { "type": "string" }, "description": "Subset of manifest.permissions the user explicitly grants" }
           }
         } } } },
-        "responses": { "200": { "description": "{ ok, installed, version, fileCount, signed, trusted }" } }
+        "responses": { "200": { "description": "{ ok, installed, version, fileCount, signed, trusted, permissions: { requested, granted, legacy } }" } }
+      }
+    },
+    "/api/marketplace/permissions": {
+      "get": {
+        "tags": ["Marketplace"], "summary": "v2 Theme D — 取得 permission catalog（label / description / risk）",
+        "responses": { "200": { "description": "{ permissions: { id: { label, description, risk } } }" } }
       }
     },
     "/api/marketplace/installed": {
       "get": {
         "tags": ["Marketplace"], "summary": "已安裝的 plugin 清單",
-        "responses": { "200": { "description": "{ plugins: [...] }" } }
+        "responses": { "200": { "description": "{ plugins: [{ name, version, signed, permissions: { requested, granted, legacy } | null }] }" } }
       }
     },
     "/api/marketplace/trusted": {

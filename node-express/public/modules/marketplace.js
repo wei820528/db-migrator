@@ -72,10 +72,38 @@
       </tr>
     `).join('');
 
+    // v2 Theme D Phase 1：列出 requested permissions + 預設 checkbox 全勾，但使用者可以取消
+    renderPermissions(r.permissions);
+
     const needsConfirm = !r.signature.signed || !r.signature.trusted;
     $('#mp-unsigned-confirm').hidden = !needsConfirm;
     $('#mp-allow-unsigned').checked = false;
     $('#mp-install').disabled = needsConfirm;     // re-enabled when checkbox flipped
+  }
+
+  function renderPermissions(p) {
+    const wrap = $('#mp-permissions');
+    if (!wrap) return;
+    if (!p || !p.details || p.details.length === 0) {
+      wrap.innerHTML = '<small class="muted">(no permissions section in manifest)</small>';
+      return;
+    }
+    const riskColor = (r) => ({ 1: '#065f46', 2: '#92400e', 3: '#991b1b' }[r] || '#374151');
+    const riskBg    = (r) => ({ 1: '#d1fae5', 2: '#fef3c7', 3: '#fee2e2' }[r] || '#f3f4f6');
+    const banner = p.legacy
+      ? '<div style="background:#fee2e2; padding:8px; border-radius:4px; margin-bottom:8px; font-size:13px; color:#991b1b;">⚠ 這個 plugin 沒宣告 permissions，會以 <code>unrestricted</code>（完整 Node 存取）安裝 — 老 plugin 才會這樣。建議只裝可信來源。</div>'
+      : '';
+    wrap.innerHTML = banner + '<table style="width:100%; font-size:13px;"><thead><tr>'
+      + '<th style="width:24px;"></th><th>權限</th><th>說明</th><th>風險</th>'
+      + '</tr></thead><tbody>'
+      + p.details.map((d) => `
+        <tr>
+          <td><input type="checkbox" class="mp-perm" value="${escapeHtml(d.id)}" checked /></td>
+          <td><code>${escapeHtml(d.id)}</code><br><small>${escapeHtml(d.label)}</small></td>
+          <td><small>${escapeHtml(d.description)}</small></td>
+          <td><span style="background:${riskBg(d.risk)}; color:${riskColor(d.risk)}; padding:2px 8px; border-radius:4px; font-size:12px;">risk ${d.risk}/3</span></td>
+        </tr>
+      `).join('') + '</tbody></table>';
   }
 
   async function install() {
@@ -83,13 +111,20 @@
     const needsConfirm = !lastPreview.signature.signed || !lastPreview.signature.trusted;
     const allowUnsigned = $('#mp-allow-unsigned').checked;
     if (needsConfirm && !allowUnsigned) { setMsg('請勾選確認框'); return; }
+
+    // v2 Theme D：採集勾選的 permissions
+    const grantedPermissions = [...document.querySelectorAll('.mp-perm:checked')].map((c) => c.value);
+
     setMsg('安裝中…', '#6b7280');
     try {
       const r = await api('/install', {
         method: 'POST',
-        body: JSON.stringify({ url: currentUrl, allowUnsigned }),
+        body: JSON.stringify({ url: currentUrl, allowUnsigned, grantedPermissions }),
       });
-      setMsg(`✓ 已安裝 ${r.installed} v${r.version}（${r.fileCount} 檔）`, '#065f46');
+      const grantedNote = r.permissions
+        ? ` · ${r.permissions.granted.length}/${r.permissions.requested.length} permissions granted`
+        : '';
+      setMsg(`✓ 已安裝 ${r.installed} v${r.version}（${r.fileCount} 檔${grantedNote}）`, '#065f46');
       $('#mp-preview-pane').hidden = true;
       $('#mp-url').value = '';
       lastPreview = null;
@@ -105,15 +140,22 @@
         tb.innerHTML = '<tr><td colspan="5" style="color:#9ca3af; text-align:center;">尚無外掛</td></tr>';
         return;
       }
-      tb.innerHTML = r.plugins.map((p) => `
-        <tr>
+      tb.innerHTML = r.plugins.map((p) => {
+        // v2 Theme D Phase 1: 顯示授予的權限數 + legacy 警告
+        const permSummary = !p.permissions
+          ? '<small class="muted">(legacy install)</small>'
+          : p.permissions.legacy
+            ? '<small style="color:#dc2626;">⚠ unrestricted</small>'
+            : `<small>${p.permissions.granted.length}/${p.permissions.requested.length} granted</small>`;
+        return `<tr>
           <td><b>${escapeHtml(p.name)}</b></td>
           <td>${escapeHtml(p.version)}</td>
           <td>${p.signed ? '✓' : '⚠ 未簽'}</td>
+          <td>${permSummary}</td>
           <td>${escapeHtml(p.description || '—')}</td>
           <td><button class="row-action danger" data-uninstall="${escapeHtml(p.name)}">移除</button></td>
-        </tr>
-      `).join('');
+        </tr>`;
+      }).join('');
     } catch (e) { console.error('loadInstalled', e); }
   }
 

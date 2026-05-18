@@ -113,6 +113,10 @@ function validateManifestShape(m) {
   }
   if (allFiles.length === 0) throw new Error('Manifest lists no files');
   if (allFiles.length > MAX_FILES) throw new Error(`Too many files (max ${MAX_FILES})`);
+
+  // v2 Theme D Phase 1：permissions 欄位驗證（沒寫的會被當 unrestricted legacy）
+  const { validatePermissions } = require('./plugin-permissions');
+  validatePermissions(m.permissions);
 }
 
 // Reject absolute paths, drive letters, and any `..` segment.
@@ -189,11 +193,20 @@ async function preview(githubUrl) {
     fetched.push({ rt, f, bytes: body.length, hash: hex, hashOk: !expected || expected === hex, body });
   }
 
+  // v2 Theme D Phase 1：把 requested permissions enrich 給 UI
+  const { validatePermissions, describePermissions } = require('./plugin-permissions');
+  const validated = validatePermissions(manifest.permissions);
+
   return {
     source: g,
     manifest,
     signature: sigInfo,
     files: fetched.map((x) => ({ runtime: x.rt, path: x.f, bytes: x.bytes, hash: x.hash, hashOk: x.hashOk })),
+    permissions: {
+      requested: validated.permissions,
+      details:   describePermissions(validated.permissions),
+      legacy:    validated.legacy,
+    },
     // Internal: bodies are returned only for install() consumption; the route layer strips them.
     _bodies: fetched,
   };
@@ -201,7 +214,7 @@ async function preview(githubUrl) {
 
 // ============= Install (write files atomically into plugins/) =============
 
-async function install(githubUrl, { allowUnsigned = false } = {}) {
+async function install(githubUrl, { allowUnsigned = false, grantedPermissions = null } = {}) {
   const prev = await preview(githubUrl);
   if (!prev.signature.signed && !allowUnsigned) {
     throw new Error('plugin is unsigned — re-run with allowUnsigned=true after reviewing source');
@@ -213,6 +226,12 @@ async function install(githubUrl, { allowUnsigned = false } = {}) {
     if (!f.hashOk) throw new Error(`hash failed for ${f.path}`);
   }
 
+  // v2 Theme D Phase 1: 強制使用者 explicitly grant 要的 permissions
+  // grantedPermissions=null → 預設全 grant（向下相容；UI 預設會送過來 full list）
+  const { verifyGrants } = require('./plugin-permissions');
+  const grants = verifyGrants(prev.permissions.requested,
+                              grantedPermissions ?? prev.permissions.requested);
+
   const pluginRoot = path.join(PLUGINS_DIR, prev.manifest.name);
   if (!isInside(pluginRoot, PLUGINS_DIR)) throw new Error('install path escape attempt');
 
@@ -222,6 +241,13 @@ async function install(githubUrl, { allowUnsigned = false } = {}) {
   fs.mkdirSync(staging, { recursive: true });
   try {
     fs.writeFileSync(path.join(staging, 'plugin.json'), JSON.stringify(prev.manifest, null, 2));
+    // v2 Theme D：把 grants 寫成獨立檔，pluginHost / audit 可以讀
+    fs.writeFileSync(path.join(staging, '.granted-permissions.json'), JSON.stringify({
+      requested: prev.permissions.requested,
+      granted: grants,
+      legacy: prev.permissions.legacy,
+      grantedAt: new Date().toISOString(),
+    }, null, 2));
     for (const f of prev._bodies) {
       const outPath = path.join(staging, f.f);
       const outDir = path.dirname(outPath);
@@ -245,6 +271,7 @@ async function install(githubUrl, { allowUnsigned = false } = {}) {
     signed: prev.signature.signed,
     trusted: !!prev.signature.trusted,
     installPath: pluginRoot,
+    permissions: { requested: prev.permissions.requested, granted: grants, legacy: prev.permissions.legacy },
   };
 }
 
@@ -263,9 +290,16 @@ function listInstalled() {
     if (!fs.existsSync(mfPath)) continue;
     try {
       const m = JSON.parse(fs.readFileSync(mfPath, 'utf8'));
+      // v2 Theme D Phase 1：附帶 granted permissions（若有），給 UI 顯示
+      let grants = null;
+      try {
+        const gPath = path.join(PLUGINS_DIR, entry.name, '.granted-permissions.json');
+        if (fs.existsSync(gPath)) grants = JSON.parse(fs.readFileSync(gPath, 'utf8'));
+      } catch { /* corrupt grants file */ }
       out.push({
         name: m.name, version: m.version, description: m.description || '',
         signed: !!m.signature, dir: entry.name,
+        permissions: grants,
       });
     } catch { /* skip corrupt */ }
   }

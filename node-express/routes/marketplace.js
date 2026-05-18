@@ -18,13 +18,21 @@ router.post('/preview', async (req, res) => {
 
 // Install: assumes user has reviewed the preview already. Set allowUnsigned
 // to bypass the unsigned check (UI requires explicit confirmation for that).
+// v2 Theme D Phase 1: body.grantedPermissions 是使用者勾的 subset；不送就 default 全 grant。
 router.post('/install', async (req, res) => {
   try {
     const r = await marketplace.install(req.body?.url || '', {
       allowUnsigned: !!req.body?.allowUnsigned,
+      grantedPermissions: Array.isArray(req.body?.grantedPermissions) ? req.body.grantedPermissions : null,
     });
     res.json(r);
   } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// 列出 permission catalog（給 install UI / docs 用，方便顯示說明）
+router.get('/permissions', (req, res) => {
+  const { PERMISSIONS } = require('../lib/plugin-permissions');
+  res.json({ permissions: PERMISSIONS });
 });
 
 router.get('/installed', (req, res) => {
