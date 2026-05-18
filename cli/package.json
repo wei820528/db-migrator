@@ -1,0 +1,13 @@
+{
+  "name": "db-migrator-cli",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DB Migrator command-line client — automate dump / restore / cross-DB preview from cron / CI / scripts",
+  "bin": {
+    "dbmigrator": "bin/dbmigrator.js"
+  },
+  "scripts": {
+    "test": "node --test test/conn.test.js test/dispatch.test.js"
+  },
+  "engines": { "node": ">=18" }
+}
