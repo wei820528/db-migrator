@@ -1,16 +1,16 @@
-// Build a `CREATE TABLE` statement (and accompanying `CREATE INDEX`es) for a
-// target dialect, given an IR table object.
+// 把一個 IR table object 組成 target dialect 的 `CREATE TABLE`（含對應的
+// `CREATE INDEX`）。
 //
-// Uses Phase 1 `emit` for column types. Adds PK / NOT NULL / DEFAULT /
-// AUTO_INCREMENT plumbing. Foreign keys are NOT emitted yet — would need to
-// be deferred until every table exists; that's Phase 5 polish.
+// 欄位型別走 Phase 1 的 `emit`。本檔額外處理 PK / NOT NULL / DEFAULT /
+// AUTO_INCREMENT。Foreign key 暫不處理 — 要等所有 table 都建好再 ALTER，
+// 留給 Phase 5 收尾。
 
 const { emit } = require('./emit');
 
-// ============ Identifier quoting per dialect ============
+// ============ 各 dialect 的識別子 quote ============
 
-// Map the dialect aliases the rest of the codebase uses ('pg', 'supabase')
-// onto the canonical name so downstream comparisons stay simple.
+// 把 codebase 其他地方用的 dialect 別名（'pg' / 'supabase'）轉成 canonical 名稱，
+// 後續 if/switch 比對才不會漏。
 function normalizeTarget(t) {
   if (t === 'pg' || t === 'supabase') return 'postgres';
   return t;
@@ -19,28 +19,27 @@ function normalizeTarget(t) {
 function ident(name, target) {
   const t = normalizeTarget(target);
   if (t === 'mysql') return '`' + String(name).replace(/`/g, '``') + '`';
-  // postgres, sqlite → double-quoted
+  // postgres / sqlite → 雙引號
   return '"' + String(name).replace(/"/g, '""') + '"';
 }
 
 // ============ Default value emission ============
 
-// Heuristic: pass through if it looks like a function call (e.g. CURRENT_TIMESTAMP,
-// nextval(...), CURRENT_DATE) or is already quoted; otherwise treat as a string
-// literal and quote it.
+// 啟發式：看起來像 function call（CURRENT_TIMESTAMP / nextval / CURRENT_DATE）
+// 或已經被 quote 的就直接 pass through；其他當字串字面值，幫忙 quote。
 function emitDefault(def, target) {
   if (def === null || def === undefined) return null;
   const s = String(def).trim();
   if (s === '') return null;
-  // Already a function call / keyword (case-insensitive)
+  // 已經是 function call 或 keyword（case-insensitive）
   if (/^(CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|NOW\(\)|TRUE|FALSE|NULL)\b/i.test(s)) return s;
-  // SERIAL/BIGSERIAL: pg has nextval('users_id_seq'::regclass) — drop, handled by SERIAL type
+  // SERIAL/BIGSERIAL：PG 會給 nextval('users_id_seq'::regclass) — 直接丟掉，SERIAL 型別自己會處理
   if (/^nextval\(/i.test(s)) return null;
-  // Looks numeric
+  // 看起來是數字
   if (/^-?\d+(\.\d+)?$/.test(s)) return s;
-  // Already quoted (mysql / pg literal)
+  // 已經被 quote 過（mysql / pg literal）
   if (/^'.*'$/.test(s) || /^B?'.*'$/.test(s)) return s;
-  // Plain string → quote
+  // 純字串 → 幫忙 quote
   return "'" + s.replace(/'/g, "''") + "'";
 }
 
@@ -51,12 +50,12 @@ function buildColumnDdl(col, target) {
   const warnings = [];
   let typeSql;
 
-  // Auto-increment requires a hand-crafted type per dialect — bypass emit() in that case.
+  // Auto-increment 在每個 dialect 都要自己手刻型別 — 這裡 bypass emit()
   if (col.autoIncrement && col.primaryKey) {
     if (t === 'mysql') {
       typeSql = col.type.size === 64 ? 'BIGINT' : 'INT';
     } else if (t === 'sqlite') {
-      typeSql = 'INTEGER';   // SQLite: only INTEGER PRIMARY KEY can use AUTOINCREMENT
+      typeSql = 'INTEGER';   // SQLite：只有 INTEGER PRIMARY KEY 才能用 AUTOINCREMENT
     } else {
       // postgres → SERIAL family
       typeSql = col.type.size === 64 ? 'BIGSERIAL' : (col.type.size === 16 ? 'SMALLSERIAL' : 'SERIAL');
@@ -68,9 +67,8 @@ function buildColumnDdl(col, target) {
   }
 
   let ddl = `${ident(col.name, t)} ${typeSql}`;
-  // NOT NULL is redundant when the column is part of a PK (PK implies NOT NULL in
-  // standard SQL; SQLite tolerates NULL in PK but most dumps don't bother), and
-  // PG SERIAL is already implicitly NOT NULL.
+  // PK column 不額外加 NOT NULL（標準 SQL PK 隱含 NOT NULL；SQLite 雖然容忍 NULL PK
+  // 但多數 dump 也不會這樣寫）；PG SERIAL 本身也已經隱含 NOT NULL。
   const pkImpliesNotNull = !!col.primaryKey;
   const pgSerial = t === 'postgres' && col.autoIncrement && col.primaryKey;
   if (!pkImpliesNotNull && !pgSerial) {
@@ -79,9 +77,9 @@ function buildColumnDdl(col, target) {
   const def = emitDefault(col.default, t);
   if (def != null) ddl += ` DEFAULT ${def}`;
 
-  // MySQL puts AUTO_INCREMENT on the column itself
+  // MySQL 把 AUTO_INCREMENT 放在欄位上
   if (col.autoIncrement && col.primaryKey && t === 'mysql') ddl += ' AUTO_INCREMENT';
-  // SQLite: same — AUTOINCREMENT after PRIMARY KEY (handled at PK clause below for single-col PK)
+  // SQLite 也是 — AUTOINCREMENT 跟在 PRIMARY KEY 後面（single-PK 時在下面 PK 區段處理）
 
   return { ddl, warnings };
 }
@@ -101,14 +99,14 @@ function buildCreateTable(irTable, target) {
     let line = r.ddl;
     warnings.push(...r.warnings);
 
-    // SQLite single-column INTEGER PRIMARY KEY AUTOINCREMENT — inline on the column
+    // SQLite 單欄 INTEGER PRIMARY KEY AUTOINCREMENT — 直接 inline 在欄位定義上
     if (t === 'sqlite' && singlePk && col.primaryKey) {
       line += col.autoIncrement ? ' PRIMARY KEY AUTOINCREMENT' : ' PRIMARY KEY';
     }
     lines.push('  ' + line);
   }
 
-  // Table-level PK clause for everything that didn't get inlined
+  // 沒被 inline 的就走 table-level PRIMARY KEY clause
   const inlinedPk = t === 'sqlite' && singlePk;
   if (pkCols.length > 0 && !inlinedPk) {
     lines.push(`  PRIMARY KEY (${pkCols.map((c) => ident(c, t)).join(', ')})`);
@@ -119,13 +117,13 @@ function buildCreateTable(irTable, target) {
 }
 
 // ============ CREATE INDEX ============
-// Secondary indexes only — PK already in the CREATE TABLE.
+// 只處理 secondary indexes — PK 已經在 CREATE TABLE 裡。
 
 function buildCreateIndexes(irTable, target) {
   const t = normalizeTarget(target);
   const out = [];
   for (const idx of irTable.indexes || []) {
-    // PG's pg_indexes returns full DDL — pass through if available
+    // PG 的 pg_indexes 已經給整段 DDL — 有就直接 pass through
     if (t === 'postgres' && idx.def) { out.push(idx.def + ';'); continue; }
     if (!idx.name || !idx.columns || idx.columns.length === 0) continue;
     const unique = idx.unique ? 'UNIQUE ' : '';

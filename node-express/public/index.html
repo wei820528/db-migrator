@@ -144,6 +144,7 @@
         <button data-mode="project">專案備份</button>
         <button data-mode="schedule">排程</button>
         <button data-mode="marketplace">外掛商店</button>
+        <button data-mode="crossdb">跨 DB 遷移</button>
       </div>
     </section>
 
@@ -358,6 +359,32 @@
       </table>
     </section>
 
+    <!-- Step 3f: cross-DB migration preview -->
+    <section id="step-crossdb" class="step mode-panel" hidden>
+      <h2>3. 跨 DB 遷移（dry-run preview）</h2>
+      <p style="font-size:13px; color:#6b7280; margin: 4px 0 14px;">
+        把 source DB 的 schema 翻成 target dialect 看看會長什麼樣 + 哪些欄位會有資訊損失。<b>不執行</b>，純預覽。
+        Source 用上方主連線（先測過 + 在 2.5 勾資料庫），target 在下面選。目前支援 MySQL ↔ PostgreSQL ↔ SQLite 三角。
+      </p>
+
+      <div class="form-row">
+        <label>Target dialect
+          <select id="cdb-target" style="margin-left:6px; padding:6px 8px;">
+            <option value="">(選擇)</option>
+            <option value="mysql">MySQL</option>
+            <option value="postgres">PostgreSQL</option>
+            <option value="sqlite">SQLite</option>
+          </select>
+        </label>
+        <button type="button" id="cdb-preview" class="btn-primary">預覽</button>
+        <span id="cdb-msg" style="font-size:12px;"></span>
+      </div>
+
+      <div id="cdb-summary" hidden style="margin:14px 0; padding:10px 14px; background:#fef3c7; border-radius:6px; font-size:13px;"></div>
+
+      <div id="cdb-tables"></div>
+    </section>
+
     <!-- Schedule modal -->
     <div id="schedule-modal" hidden style="position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;">
       <div style="position:absolute;inset:0;background:rgba(15,23,42,.55);" id="sm-backdrop"></div>
@@ -395,6 +422,7 @@
   <script src="modules/project.js"></script>
   <script src="modules/schedule.js"></script>
   <script src="modules/marketplace.js"></script>
+  <script src="modules/crossdb.js"></script>
   <script src="app.js"></script>
   <script src="tour.js"></script>
 </body>

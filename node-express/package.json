@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test test/shared.test.js test/encrypt.test.js test/revocation.test.js test/nosql.test.js test/marketplace.test.js test/routines.test.js test/cross-db.test.js test/cross-db-format.test.js test/cross-db-tables.test.js"
+    "test": "node --test test/shared.test.js test/encrypt.test.js test/revocation.test.js test/nosql.test.js test/marketplace.test.js test/routines.test.js test/cross-db.test.js test/cross-db-format.test.js test/cross-db-tables.test.js test/cross-db-preview.test.js"
   },
   "engines": {
     "node": ">=18"

@@ -1,4 +1,4 @@
-// Parse a source-dialect column type string into the neutral IR.
+// 把來源 dialect 的欄位型別字串解析成中性 IR。
 //
 //   normalize('mysql', 'INT UNSIGNED')
 //     → { kind: 'int', size: 32, unsigned: true }
@@ -7,15 +7,15 @@
 //   normalize('sqlite', 'TEXT')
 //     → { kind: 'text' }
 //
-// Anything unrecognised falls through to `{ kind: 'unknown', raw }` so
-// emit.js can pass it through with a warning instead of silently dropping.
+// 看不懂的型別會 fallback 成 `{ kind: 'unknown', raw }`，這樣 emit.js
+// 可以 pass-through 並附 warning，而不是默默 drop 掉。
 
-// Common helpers
+// 共用 helpers
 function intKind(size, unsigned) {
   return unsigned ? { kind: 'int', size, unsigned: true } : { kind: 'int', size };
 }
 function parseSize(str) {
-  // 'VARCHAR(128)' → 128;  'DECIMAL(10,2)' → [10, 2];  'TEXT' → null
+  // 'VARCHAR(128)' → 128；'DECIMAL(10,2)' → [10, 2]；'TEXT' → null
   const m = /\(\s*(\d+)(?:\s*,\s*(\d+))?\s*\)/.exec(str);
   if (!m) return null;
   return m[2] != null ? [Number(m[1]), Number(m[2])] : Number(m[1]);
@@ -67,7 +67,7 @@ function normalizeMySql(src) {
     case 'JSON':      return { kind: 'json' };
 
     case 'ENUM': {
-      // Pull values from the ORIGINAL (case-preserving) source — `base` has been upper-cased.
+      // 從原始（保留大小寫）source 拉 values — `base` 已經被 upper-case 過。
       const m = /\((.*)\)/.exec(String(src));
       const values = m ? m[1].split(',').map((v) => v.trim().replace(/^'|'$/g, '').replace(/''/g, "'")) : [];
       return { kind: 'enum', values };
@@ -128,11 +128,11 @@ function normalizePg(src) {
   }
 }
 
-// ============ SQLite (type affinity is loose — match common patterns) ============
+// ============ SQLite（type affinity 很鬆 — 用 pattern 比對） ============
 
 function normalizeSqlite(src) {
   const s = String(src).trim().toUpperCase();
-  // SQLite "type affinity" rules: INTEGER, REAL, TEXT, BLOB, NUMERIC
+  // SQLite「type affinity」規則：INTEGER / REAL / TEXT / BLOB / NUMERIC 五大類
   if (/\bINT\b|\bINTEGER\b/.test(s)) return intKind(64);
   if (/\bREAL\b|\bFLOA\b|\bDOUB\b/.test(s)) return { kind: 'float', size: 64 };
   if (/\bBLOB\b/.test(s)) return { kind: 'binary' };
@@ -151,7 +151,7 @@ function normalizeSqlite(src) {
     const size = parseSize(s);
     return Number.isFinite(size) ? { kind: 'string', size } : { kind: 'text' };
   }
-  // Default affinity = NUMERIC for unrecognised → treat as decimal
+  // SQLite 對沒認出來的型別 affinity 預設是 NUMERIC，這裡先當 unknown 丟給 emit pass-through
   return { kind: 'unknown', raw: src };
 }
 

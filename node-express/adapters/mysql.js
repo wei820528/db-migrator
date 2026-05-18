@@ -317,8 +317,8 @@ function parseTableNamesFromDump(sqlFilePath) {
 
 // ============ v2 Theme B — cross-DB support ============
 
-// Build the IR-shaped schema by querying information_schema. Returns one
-// IR table object per requested name (or all base tables in the DB).
+// 查 information_schema 組出 IR-shape schema。每張指定的表（沒指定就全部
+// BASE TABLE）回一個 IR table object。
 async function getSchema(conn, tableNames) {
   const c = await mysqlPromise.createConnection(buildConnConfig(conn));
   try {
@@ -336,7 +336,7 @@ async function getSchema(conn, tableNames) {
 
     const out = [];
     for (const tname of names) {
-      // Columns — COLUMN_TYPE has the full type string ('int(10) unsigned'), DATA_TYPE has just 'int'
+      // 欄位 — COLUMN_TYPE 是完整型別字串（'int(10) unsigned'），DATA_TYPE 只有 'int'
       const [cols] = await c.query(
         `SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, EXTRA
          FROM information_schema.COLUMNS
@@ -346,7 +346,7 @@ async function getSchema(conn, tableNames) {
       );
       if (cols.length === 0) continue;
 
-      // Secondary indexes (skip PRIMARY)
+      // 二級索引（跳過 PRIMARY）
       const [idxRows] = await c.query(
         `SELECT INDEX_NAME, COLUMN_NAME, NON_UNIQUE
          FROM information_schema.STATISTICS
@@ -366,6 +366,7 @@ async function getSchema(conn, tableNames) {
         name: tname,
         columns: cols.map((c) => ({
           name: c.COLUMN_NAME,
+          sourceTypeRaw: c.COLUMN_TYPE,
           type: normalize('mysql', c.COLUMN_TYPE),
           nullable: c.IS_NULLABLE === 'YES',
           primaryKey: c.COLUMN_KEY === 'PRI',
@@ -393,7 +394,7 @@ async function dumpNeutral(conn, options, outFilePath, onProgress) {
       writer.writeSchema(irt);
       if (options.noData) continue;
 
-      // Stream rows using the existing non-promise driver
+      // 用既有的 non-promise driver 串流 rows
       const queryStream = rawConn.query(`SELECT * FROM ${escapeIdent(irt.name)}`).stream();
       let n = 0;
       await new Promise((resolve, reject) => {
@@ -472,7 +473,7 @@ async function restoreNeutral(conn, neutralPath, onProgress) {
 
 function normalizeForMysqlDriver(v) {
   if (v == null) return null;
-  if (v instanceof Date) return v;            // mysql2 handles Date natively
+  if (v instanceof Date) return v;            // mysql2 直接吃 Date
   if (Buffer.isBuffer(v)) return v;
   if (typeof v === 'object') return JSON.stringify(v);
   if (typeof v === 'bigint') return v.toString();

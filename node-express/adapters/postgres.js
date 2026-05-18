@@ -359,8 +359,8 @@ function parseTableNamesFromDump(sqlFilePath) {
 
 // ============ v2 Theme B — cross-DB support ============
 
-// Returns IR-shaped table descriptors. `tableNames` can be 'schema.table' or
-// bare table (defaults to 'public.<table>').
+// 回傳 IR-shape table descriptors。`tableNames` 可以是 'schema.table' 也可以是
+// 純表名（後者預設加 'public.' prefix）。
 async function getSchema(conn, tableNames) {
   const c = buildClient(conn);
   await c.connect();
@@ -379,7 +379,7 @@ async function getSchema(conn, tableNames) {
 
     const out = [];
     for (const [schema, tname] of tablePairs) {
-      // Columns — udt_name has the underlying type; data_type can be 'USER-DEFINED' for enums etc.
+      // 欄位 — udt_name 是底層型別；data_type 對 enum 等會回 'USER-DEFINED'
       const cols = (await c.query(
         `SELECT column_name, data_type, udt_name, character_maximum_length,
                 numeric_precision, numeric_scale, is_nullable, column_default
@@ -390,7 +390,7 @@ async function getSchema(conn, tableNames) {
       )).rows;
       if (cols.length === 0) continue;
 
-      // PK columns
+      // PK 欄位
       const pkCols = new Set((await c.query(
         `SELECT a.attname
          FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
@@ -398,7 +398,7 @@ async function getSchema(conn, tableNames) {
         [schema, tname]
       )).rows.map((r) => r.attname));
 
-      // Indexes (exclude PK / unique-constraint backing indexes)
+      // 索引（排除 PK 跟 unique-constraint 自動建的）
       const idxRows = (await c.query(
         `SELECT indexname, indexdef FROM pg_indexes
          WHERE schemaname = $1 AND tablename = $2
@@ -410,7 +410,7 @@ async function getSchema(conn, tableNames) {
         name: tname,
         schema,
         columns: cols.map((c) => {
-          // Build the type string PG would use, then normalize
+          // 拼出 PG 自己的型別字串再丟給 normalize
           let typeStr = c.udt_name || c.data_type;
           if (c.character_maximum_length) typeStr = `${typeStr}(${c.character_maximum_length})`;
           else if (c.numeric_precision != null && /numeric|decimal/i.test(typeStr)) {
@@ -420,11 +420,12 @@ async function getSchema(conn, tableNames) {
           }
           return {
             name: c.column_name,
+            sourceTypeRaw: typeStr,
             type: normalize('pg', typeStr),
             nullable: c.is_nullable === 'YES',
             primaryKey: pkCols.has(c.column_name),
             default: c.column_default,
-            // PG's "default nextval(...)" is the giveaway for SERIAL-style autoinc
+            // PG 的 default 若是 nextval(...) 就是 SERIAL-style autoinc 的特徵
             autoIncrement: typeof c.column_default === 'string' && /nextval\(/i.test(c.column_default),
           };
         }),
@@ -483,7 +484,7 @@ async function restoreNeutral(conn, neutralPath, onProgress) {
       const schema = schemas.get(pendingTable);
       const colNames = schema.columns.map((c) => c.name);
       const cols = colNames.map(ident).join(',');
-      // Build $1, $2, ... per row with running counter
+      // 用一個遞增 counter 拼出 $1、$2、...
       const rowsSql = [];
       const flat = [];
       let p = 1;
@@ -534,8 +535,8 @@ async function restoreNeutral(conn, neutralPath, onProgress) {
 
 function normalizeForPgDriver(v, irType) {
   if (v == null) return null;
-  if (v instanceof Date) return v;             // pg driver handles Date
-  if (Buffer.isBuffer(v)) return v;            // pg accepts Buffer for bytea
+  if (v instanceof Date) return v;             // pg driver 直接吃 Date
+  if (Buffer.isBuffer(v)) return v;            // pg 接受 Buffer 進 bytea
   if (irType?.kind === 'json' && typeof v === 'object') return JSON.stringify(v);
   if (typeof v === 'bigint') return v.toString();
   return v;

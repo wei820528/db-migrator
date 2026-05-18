@@ -1,5 +1,5 @@
-// Cross-DB migration — public surface.
-// See README.md for status + design.
+// Cross-DB migration — 對外 public surface。
+// 詳見 README.md 的 status 與設計。
 
 const { normalize } = require('./normalize');
 const { emit }      = require('./emit');
@@ -7,7 +7,7 @@ const { emit }      = require('./emit');
 // translate(source, sourceDialect, targetDialect)
 //   → { sql, warnings }
 //
-// Convenience wrapper: parse source-dialect string into IR then emit for target.
+// 便利包裝：先把 source-dialect 字串 parse 成 IR，再 emit 成 target。
 //   translate('INT UNSIGNED', 'mysql', 'pg')
 //     → { sql: 'BIGINT', warnings: ["PG has no unsigned int..."] }
 function translate(source, sourceDialect, targetDialect) {

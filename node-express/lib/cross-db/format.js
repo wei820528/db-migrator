@@ -1,6 +1,6 @@
-// Neutral dump format — read / write JSONL event stream.
+// Neutral dump 格式 — read / write JSONL event 串流。
 //
-// Format = JSON Lines. Each line is one event. Three event types:
+// 格式 = JSON Lines（一行一個 event）。三種 event：
 //
 //   { "op": "header", "format": "neutral-v1", "sourceDialect": "mysql",
 //     "db": "<name>", "generated": "<ISO>", "tables": ["users","orders"] }
@@ -18,12 +18,11 @@
 //
 //   { "op": "row", "table": "users", "values": { "id": 1, "email": "a@x.com" } }
 //
-// Order matters: header must come first, then for each table its schema
-// event must precede that table's row events. Tables themselves can be
-// interleaved or grouped — the reader keeps a name→schema map.
+// 順序很重要：header 一定要在最前面；每張 table 的 schema event 一定要在
+// 自己的 row events 前面。Tables 之間可以交錯或集中 — reader 維護 name→schema map。
 //
-// `format: "neutral-v1"` is the version marker. If we ever break the format
-// we bump to "neutral-v2" and readers can reject incompatible files.
+// `format: "neutral-v1"` 是版本標記。將來若 break format 就升 "neutral-v2"，
+// reader 可以拒絕不相容的檔案。
 
 const fs = require('fs');
 const readline = require('readline');
@@ -65,7 +64,7 @@ class NeutralWriter {
   }
 }
 
-// Generator-style reader: yields events in order, lazily.
+// Generator 風格的 reader：lazy 依序 yield events。
 async function* readNeutral(filePath) {
   const rl = readline.createInterface({
     input: fs.createReadStream(filePath, { encoding: 'utf8' }),
@@ -81,15 +80,17 @@ async function* readNeutral(filePath) {
   }
 }
 
-// Quick metadata read — load header + all schema events without iterating rows.
-// Useful for the dry-run preview UI: shows what will be migrated before pushing data.
+// （錯誤訊息保留英文，方便 grep / log。Comments 以外的 user-facing 訊息一律英文。）
+
+// 快速讀 metadata — 只載入 header 跟所有 schema events，不掃 rows。
+// 給 dry-run preview UI 用：在實際推資料前先讓使用者看會遷移什麼。
 async function readMetadata(filePath) {
   let header = null;
   const schemas = [];
   for await (const evt of readNeutral(filePath)) {
     if (evt.op === 'header') header = evt;
     else if (evt.op === 'schema') schemas.push(evt);
-    else if (evt.op === 'row') break;   // metadata only — stop at first data row
+    else if (evt.op === 'row') break;   // metadata-only — 碰到第一個 row event 就停
   }
   return { header, schemas };
 }

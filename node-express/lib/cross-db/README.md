@@ -19,7 +19,10 @@ later is one parser + one emitter, not N² translators.
 | 3a | `tables.js` — IR → `CREATE TABLE` + `CREATE INDEX` per target | done |
 | 3b | `restoreNeutral(conn, neutralPath)` per adapter (sqlite / mysql / pg) | done |
 | 3c | Tests + sqlite end-to-end (`dumpNeutral` → `restoreNeutral` round-trip) | done |
-| 4  | Dry-run preview UI | pending |
+| 4a | `getSchema` 每欄加 `sourceTypeRaw`（保留原始 dialect string） | done |
+| 4b | `POST /api/cross-db/preview-live` route + `buildTablePreview` helper | done |
+| 4c | UI: 跨 DB 遷移 tab + per-table preview cards + warnings inline | done |
+| 4d | Tests for preview helper + HTTP route validation | done |
 | 5  | Integration matrix (6 directions) | pending |
 
 ## IR shape
@@ -72,6 +75,7 @@ before the actual run. Examples:
 - [encode.js](encode.js) — driver value ↔ JSON-safe value, schema-guided (Date / Buffer / BigInt / JSON)
 - [format.js](format.js) — `NeutralWriter` / `readNeutral` / `readMetadata` for the JSONL event stream
 - [tables.js](tables.js) — IR table → `CREATE TABLE` + `CREATE INDEX` per target dialect (handles SERIAL / AUTOINCREMENT / AUTO_INCREMENT, PK clause inlining for sqlite, default-value heuristic)
+- [preview.js](preview.js) — `buildTablePreview(ir, target)` + `stringifyIr(t)` — pure helpers behind `/api/cross-db/preview-live`
 - [index.js](index.js) — public surface: `normalize(dialect, source) → ir`, `emit(ir, target) → { sql, warnings }`, `translate(src, srcD, tgtD)`
 
 Adapter-side additions:

@@ -163,8 +163,8 @@ function parseTableNamesFromDump(sqlFilePath) {
 
 // ============ v2 Theme B — cross-DB support ============
 
-// Returns IR-shaped table descriptors for the named tables (or all if not given).
-// IR shape per ../lib/cross-db/README.md.
+// 回傳指定 table（沒給就回全部）的 IR-shape table descriptors。
+// IR shape 詳見 ../lib/cross-db/README.md。
 function getSchema(conn, tableNames) {
   const db = open(conn, true);
   try {
@@ -174,15 +174,15 @@ function getSchema(conn, tableNames) {
 
     const out = [];
     for (const tname of tables) {
-      // PRAGMA table_info returns: cid, name, type, notnull, dflt_value, pk
+      // PRAGMA table_info 回：cid / name / type / notnull / dflt_value / pk
       const cols = db.prepare(`PRAGMA table_info(${ident(tname)})`).all();
       if (cols.length === 0) continue;
 
-      // PRAGMA index_list → all indexes; PRAGMA index_info per-index for column list
+      // PRAGMA index_list → 取得所有 index；再用 PRAGMA index_info 補欄位列表
       const indexRows = db.prepare(`PRAGMA index_list(${ident(tname)})`).all();
       const indexes = [];
       for (const idx of indexRows) {
-        if (idx.origin === 'pk') continue;     // implicit PK index — emitted via primaryKey flag
+        if (idx.origin === 'pk') continue;     // 隱含的 PK index — 已用 primaryKey flag 表達
         const cols = db.prepare(`PRAGMA index_info(${ident(idx.name)})`).all();
         indexes.push({
           name: idx.name,
@@ -195,11 +195,12 @@ function getSchema(conn, tableNames) {
         name: tname,
         columns: cols.map((c) => ({
           name: c.name,
+          sourceTypeRaw: c.type || 'TEXT',
           type: normalize('sqlite', c.type || 'TEXT'),
           nullable: c.notnull === 0,
           primaryKey: c.pk > 0,
           default: c.dflt_value,
-          // SQLite's INTEGER PRIMARY KEY is implicitly auto-incrementing
+          // SQLite 的 INTEGER PRIMARY KEY 隱含 auto-incrementing
           autoIncrement: c.pk > 0 && /\bINTEGER\b/i.test(c.type || ''),
         })),
         indexes,
@@ -209,7 +210,7 @@ function getSchema(conn, tableNames) {
   } finally { db.close(); }
 }
 
-// Stream rows in the neutral format. Same options as dump() (options.tables to filter).
+// 以 neutral format 串流寫 rows。option 同 dump()（options.tables 篩選）。
 async function dumpNeutral(conn, options, outFilePath, onProgress) {
   const irTables = getSchema(conn, options.tables);
   const writer = new NeutralWriter(outFilePath);
@@ -240,15 +241,15 @@ async function dumpNeutral(conn, options, outFilePath, onProgress) {
   return { outFilePath };
 }
 
-// Restore from a neutral JSONL dump produced by ANY source adapter.
-// Reads schema events → emits CREATE TABLE + CREATE INDEX in SQLite dialect,
-// then row events → parameterized INSERTs.
+// 從任何 source adapter 產的 neutral JSONL dump 還原。
+// 讀 schema events → emit SQLite 方言的 CREATE TABLE + CREATE INDEX，
+// 讀 row events → parameterized INSERTs（不需要自己 escape）。
 async function restoreNeutral(conn, neutralPath, onProgress) {
   const p = pickPath(conn);
   if (!p) throw new Error('SQLite needs a file path');
   const db = new Database(p);
   const schemas = new Map();              // table name → IR schema event
-  const inserters = new Map();            // table name → cached prepared INSERT
+  const inserters = new Map();            // table name → 快取的 prepared INSERT
   const allWarnings = [];
 
   try {
@@ -284,7 +285,7 @@ async function restoreNeutral(conn, neutralPath, onProgress) {
             inserters.set(evt.table, insert);
           }
           const decoded = decodeRow(evt.values, schema.columns);
-          // better-sqlite3 doesn't accept Buffer; pass raw bytes
+          // better-sqlite3 對某些 JS 型別會吵 — 在這裡先 normalize 成它能吃的形式
           const vals = colNames.map((n) => {
             const v = decoded[n];
             if (v == null) return null;

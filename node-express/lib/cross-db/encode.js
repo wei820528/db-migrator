@@ -1,27 +1,26 @@
-// Neutral value encoder / decoder for the cross-DB dump format.
+// Cross-DB dump format 用的中性 value encoder / decoder。
 //
-// The dump format (see ../README.md → "Phase 2 format") writes a {schema}
-// event before each table's rows. Both encoder and decoder consult that IR
-// to figure out how to serialize each column — no per-value `$type` wrappers,
-// which would collide with user-supplied JSON content.
+// Dump 格式（詳見 ../README.md → "Phase 2 format"）會在每張 table 的 rows
+// 前面寫一個 {schema} event。Encoder 跟 decoder 都查那份 IR 決定怎麼序列化
+// 每個欄位 — 不用 per-value `$type` wrapper，否則會跟使用者 JSON 欄位的內容衝突。
 //
-// Encoding rules (driver value → JSON-safe value):
+// Encoding 規則（driver value → JSON-safe value）：
 //
-//   IR kind         driver type            JSON value
+//   IR kind         driver 型別             JSON value
 //   ──────────────  ─────────────────────  ─────────────────────────────────
-//   int             number / BigInt        number (if safe int) else string
+//   int             number / BigInt        number（safe int 範圍內）否則 string
 //   float           number                 number
-//   decimal         string / number        string (preserve precision)
+//   decimal         string / number        string（保留精度）
 //   bool            boolean / 0/1          boolean
 //   string / text   string                 string
 //   enum            string                 string
 //   uuid            string                 string
 //   date            Date / string          'YYYY-MM-DD'
-//   time            string                 'HH:MM:SS' (with optional fractional seconds)
-//   datetime        Date / string          ISO 8601 ('YYYY-MM-DDTHH:MM:SS[.sss]Z')
+//   time            string                 'HH:MM:SS'（可選小數秒）
+//   datetime        Date / string          ISO 8601（'YYYY-MM-DDTHH:MM:SS[.sss]Z'）
 //   binary          Buffer / Uint8Array    base64 string
-//   json            any                    passed through (nested JSON value)
-//   unknown         any                    JSON.stringify-able value as-is
+//   json            any                    pass through（nested JSON value）
+//   unknown         any                    可被 JSON.stringify 的 value 原樣帶過
 
 const MAX_SAFE = Number.MAX_SAFE_INTEGER;
 const MIN_SAFE = Number.MIN_SAFE_INTEGER;
@@ -41,7 +40,7 @@ function encodeValue(value, irType) {
     case 'float':
       return Number(value);
     case 'decimal':
-      // PG driver returns string; mysql2 may return number or string depending on config
+      // PG driver 回 string；mysql2 可能回 number 也可能回 string，看 driver 設定
       return typeof value === 'string' ? value : String(value);
     case 'bool':
       if (typeof value === 'boolean') return value;
@@ -58,7 +57,7 @@ function encodeValue(value, irType) {
       return String(value);
     case 'datetime':
       if (value instanceof Date) return value.toISOString();
-      // mysql2 might return strings like '2026-05-18 03:14:15'
+      // mysql2 可能回 '2026-05-18 03:14:15' 這種字串
       if (typeof value === 'string') {
         const iso = value.replace(' ', 'T');
         return /Z$|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : iso + 'Z';
@@ -70,13 +69,13 @@ function encodeValue(value, irType) {
       if (typeof value === 'string') return Buffer.from(value).toString('base64');
       return null;
     case 'json':
-      // Some drivers return JSON column values as strings, others as objects
+      // 有些 driver 回 string、有些回 object
       if (typeof value === 'string') {
         try { return JSON.parse(value); } catch { return value; }
       }
       return value;
     default:
-      // Unknown — try JSON-friendly coercion
+      // Unknown — 試著做 JSON-friendly 轉換
       if (value instanceof Date)   return value.toISOString();
       if (Buffer.isBuffer(value))  return value.toString('base64');
       if (typeof value === 'bigint') return value.toString();
@@ -84,19 +83,18 @@ function encodeValue(value, irType) {
   }
 }
 
-// Reverse: JSON-decoded value back to a driver-ready value for the target dialect.
-// The target adapter can rely on this giving back Date / Buffer / etc. where
-// it makes sense, and a plain string for everything else (driver-side coercion
-// usually handles the rest).
+// 反向：JSON-decoded value 還原成適合 target dialect driver 吃的值。
+// Target adapter 可以信賴這函式在需要時回 Date / Buffer 等型別，其他情況回 string
+// （多數 driver 端 coercion 會處理剩下的）。
 function decodeValue(value, irType) {
   if (value === null || value === undefined) return null;
   const kind = irType?.kind || 'unknown';
 
   switch (kind) {
     case 'int':
-      // Came back as either number or string (for big values)
+      // 回來時可能是 number、也可能是 string（大數）
       if (typeof value === 'string') {
-        // Try BigInt if it doesn't fit in Number
+        // 塞不下 Number 就用 BigInt
         try { const n = Number(value); return Number.isSafeInteger(n) ? n : BigInt(value); }
         catch { return value; }
       }
@@ -106,10 +104,10 @@ function decodeValue(value, irType) {
     case 'bool':    return Boolean(value);
     case 'string': case 'text': case 'enum': case 'uuid': return String(value);
     case 'date': case 'time':
-      // Most drivers accept ISO strings directly
+      // 多數 driver 直接吃 ISO string
       return String(value);
     case 'datetime':
-      // Return a Date object for drivers that prefer it; ISO string still works
+      // 偏好 Date object 的 driver 拿到 Date 即可，回 ISO string 大多也通
       return new Date(String(value));
     case 'binary':
       return Buffer.from(String(value), 'base64');
@@ -120,7 +118,7 @@ function decodeValue(value, irType) {
   }
 }
 
-// Convenience: encode an entire row given an IR schema.
+// 便利包裝：給一張 IR schema，整個 row 一起 encode。
 function encodeRow(row, irColumns) {
   const out = {};
   const byName = Object.fromEntries((irColumns || []).map((c) => [c.name, c]));

@@ -1,11 +1,10 @@
-// Take an IR type object and emit it as a column DDL fragment for the target dialect.
+// 把一個 IR type object emit 成目標 dialect 的「欄位 DDL 片段」。
 //
 //   emit({ kind: 'int', size: 32, unsigned: true }, 'pg')
-//     → { sql: 'BIGINT', warnings: ["mysql 'int unsigned' has no PG equivalent; widened to BIGINT"] }
+//     → { sql: 'BIGINT', warnings: ["PG 沒有 unsigned int；widening 到 BIGINT"] }
 //
-// The emitter is deliberately small — it knows the IR shape and the target's
-// idiomatic type, nothing more. Quoting / nullability / defaults belong to
-// tables.js (the table-level emitter built on top of this).
+// 這層故意做得很小 — 只認 IR shape 跟 target 慣用型別。
+// 識別子 quote、nullability、default 都在 tables.js（上層的 table-level emitter）。
 
 function emit(ir, target) {
   switch (target) {
@@ -70,7 +69,7 @@ function emitPg(t) {
   const warnings = [];
   switch (t.kind) {
     case 'int': {
-      // PG has no unsigned — widen to the next signed size so values fit
+      // PG 沒有 unsigned — widening 到下一個 signed size 確保 value 塞得下
       if (t.unsigned) {
         warnings.push(`PG has no unsigned int; widening from ${t.size}-bit to next signed size`);
         const widened = { 8: 'SMALLINT', 16: 'INTEGER', 24: 'INTEGER', 32: 'BIGINT', 64: 'NUMERIC(20)' }[t.size] || 'BIGINT';
@@ -94,8 +93,7 @@ function emitPg(t) {
     case 'json':    return { sql: 'JSONB', warnings };
     case 'uuid':    return { sql: 'UUID', warnings };
     case 'enum': {
-      // PG has CREATE TYPE enums but those need a separate DDL statement; for now
-      // emit as VARCHAR with a CHECK — that survives round-trip without extra plumbing.
+      // PG 有 CREATE TYPE enum，但需要獨立 DDL；先用 VARCHAR + CHECK，round-trip 不需要額外管線。
       warnings.push(`enum dropped to VARCHAR + CHECK; native PG ENUM type not emitted`);
       const vals = (t.values || []).map((v) => "'" + String(v).replace(/'/g, "''") + "'").join(',');
       return { sql: `VARCHAR CHECK (VALUE IN (${vals}))`, warnings };
@@ -109,7 +107,7 @@ function emitPg(t) {
   }
 }
 
-// ============ SQLite (5 affinities — INTEGER / REAL / TEXT / BLOB / NUMERIC) ============
+// ============ SQLite（5 種 affinity — INTEGER / REAL / TEXT / BLOB / NUMERIC） ============
 
 function emitSqlite(t) {
   const warnings = [];
@@ -120,7 +118,7 @@ function emitSqlite(t) {
     }
     case 'float':   return { sql: 'REAL', warnings };
     case 'decimal':
-      // Use NUMERIC affinity but flag precision loss
+      // 用 NUMERIC affinity，但精度超 15 會 lose（NUMERIC 底層是 REAL）
       if (t.precision && t.precision > 15) {
         warnings.push(`SQLite NUMERIC affinity is REAL-backed; decimal(${t.precision},${t.scale ?? 0}) loses precision beyond 15 digits`);
       }
@@ -130,7 +128,7 @@ function emitSqlite(t) {
     case 'text':    return { sql: 'TEXT', warnings };
     case 'binary':  return { sql: 'BLOB', warnings };
     case 'date': case 'time': case 'datetime':
-      // SQLite stores these as TEXT/INTEGER/REAL — TEXT is the canonical form
+      // SQLite 把這些存成 TEXT/INTEGER/REAL — TEXT 是 canonical form
       return { sql: 'TEXT', warnings };
     case 'json':
       warnings.push('SQLite has no native JSON type; stored as TEXT (JSON1 ext works on TEXT)');
@@ -138,7 +136,7 @@ function emitSqlite(t) {
     case 'uuid':
       return { sql: 'TEXT', warnings };
     case 'enum':
-      // CHECK constraints survive in SQLite
+      // SQLite 支援 CHECK constraint
       warnings.push('SQLite has no enum type; emitted as TEXT + CHECK');
       const vals = (t.values || []).map((v) => "'" + String(v).replace(/'/g, "''") + "'").join(',');
       return { sql: `TEXT CHECK (VALUE IN (${vals}))`, warnings };

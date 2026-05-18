@@ -25,6 +25,7 @@ window.addEventListener('DOMContentLoaded', () => {
   D.projectPanel.init();
   D.schedule.init();
   D.marketplace.init();
+  D.crossdb.init();
 
   // Plugin-contributed UI loaded last so plugin cards/tabs are added on top
   D.pluginUi.init();
