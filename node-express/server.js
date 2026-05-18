@@ -13,6 +13,11 @@ if (!fs.existsSync(TMP_DIR)) fs.mkdirSync(TMP_DIR, { recursive: true });
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// OpenAPI 3.0 spec — public, 不在 license gate 內（給 client lib 開發者用）
+app.get('/openapi.json', (req, res) => {
+  res.sendFile(path.join(__dirname, 'openapi.json'));
+});
+
 // License gate — applied to /api/* (except /api/license/* and /api/modules)
 const license = require('./lib/license');
 app.use(license.gate());

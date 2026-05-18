@@ -17,6 +17,12 @@ app.set('trust proxy', true);
 app.use(cookieParser());
 app.use('/admin', express.static(path.join(__dirname, 'public')));
 
+// OpenAPI 3.0 spec + Swagger UI（v2 Theme C Phase 3）
+app.get('/openapi.json', (req, res) => {
+  res.sendFile(path.join(__dirname, 'openapi.json'));
+});
+app.use('/api-docs', express.static(path.join(__dirname, 'public', 'api-docs')));
+
 // Stripe webhook needs raw body — register BEFORE express.json()
 const stripeRoutes = require('./routes/stripe');
 app.use('/api/billing', stripeRoutes);

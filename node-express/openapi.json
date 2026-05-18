@@ -1,0 +1,355 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "DB Migrator — Client API (Node.js)",
+    "version": "1.1.0",
+    "description": "瀏覽器 DB Migrator client 的 HTTP API。負責連線測試、匯出 / 匯入、專案備份、排程、外掛商店、跨 DB 預覽。\n\nLicense 由獨立 License Server 管理（見 license-server 的 spec）；本 server 用 LICENSE_MODE env 切 offline / online / disabled。",
+    "contact": { "url": "https://github.com/wei820528/db-migrator" },
+    "license": { "name": "PolyForm Free Trial 1.0.0" }
+  },
+  "servers": [
+    { "url": "http://localhost:3000", "description": "Node 版預設" },
+    { "url": "http://localhost:3001", "description": ".NET 版預設" }
+  ],
+  "tags": [
+    { "name": "License",     "description": "授權狀態 / 上 key / online 模式登入" },
+    { "name": "Connection",  "description": "測連線 + 列 databases" },
+    { "name": "Export",      "description": "Dialect-specific SQL dump" },
+    { "name": "Import",      "description": "Inspect SQL + 還原（含 table-subset filter）" },
+    { "name": "Jobs",        "description": "Long-running job 追蹤" },
+    { "name": "Project",     "description": "Code + DB + Supabase Storage 三層備份 / 還原" },
+    { "name": "Schedule",    "description": "排程備份" },
+    { "name": "Marketplace", "description": "從 GitHub 一鍵裝 plugin" },
+    { "name": "Cross-DB",    "description": "v2 Theme B — 跨 dialect 遷移預覽" },
+    { "name": "Modules",     "description": "Adapter / route / plugin 健康狀態" }
+  ],
+  "components": {
+    "schemas": {
+      "Error":      { "type": "object", "properties": { "error": { "type": "string" } } },
+      "ConnectionInfo": {
+        "type": "object",
+        "properties": {
+          "host":     { "type": "string" },
+          "port":     { "type": "integer" },
+          "user":     { "type": "string" },
+          "password": { "type": "string", "format": "password" },
+          "database": { "type": "string" },
+          "path":     { "type": "string", "description": "SQLite-only" },
+          "authMode": { "type": "string", "enum": ["sql", "windows"], "description": "MSSQL-only" },
+          "ssl":      { "type": "boolean" }
+        }
+      },
+      "DbType": { "type": "string", "enum": ["mysql", "postgres", "mssql", "sqlite", "supabase", "mongo", "redis"] },
+      "TableInfo": {
+        "type": "object",
+        "properties": { "name": { "type": "string" }, "rowEstimate": { "type": "integer", "nullable": true } }
+      },
+      "JobStatus": {
+        "type": "object",
+        "properties": {
+          "id":      { "type": "string" },
+          "kind":    { "type": "string" },
+          "status":  { "type": "string", "enum": ["pending", "running", "done", "error"] },
+          "log":     { "type": "array", "items": { "type": "string" } },
+          "result":  { "type": "object", "additionalProperties": true },
+          "error":   { "type": "string", "nullable": true }
+        }
+      },
+      "LicenseStatus": {
+        "type": "object",
+        "properties": {
+          "mode":     { "type": "string", "enum": ["offline", "online", "disabled"] },
+          "status":   { "type": "string", "enum": ["licensed", "trial", "free", "expired", "kicked", "offline", "revoked", "disabled"] },
+          "daysLeft": { "type": "integer", "nullable": true },
+          "info":     { "type": "object", "additionalProperties": true },
+          "error":    { "type": "string", "nullable": true }
+        }
+      },
+      "IRType": {
+        "type": "object",
+        "description": "Cross-DB intermediate representation — column type。",
+        "properties": {
+          "kind":          { "type": "string", "enum": ["int","float","decimal","string","text","binary","bool","date","time","datetime","json","uuid","enum","unknown"] },
+          "size":          { "type": "integer", "nullable": true },
+          "precision":     { "type": "integer", "nullable": true },
+          "scale":         { "type": "integer", "nullable": true },
+          "unsigned":      { "type": "boolean", "nullable": true },
+          "fixed":         { "type": "boolean", "nullable": true },
+          "timezone":      { "type": "boolean", "nullable": true },
+          "values":        { "type": "array", "items": { "type": "string" }, "nullable": true, "description": "enum-only" },
+          "autoIncrement": { "type": "boolean", "nullable": true },
+          "raw":           { "type": "string", "nullable": true, "description": "unknown kind 才保留原始字串" }
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": { "description": "License gate 拒絕（未登入 / 過期 / kicked）" },
+      "BadRequest":   { "description": "請求格式錯誤", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "NotFound":     { "description": "Not found",   "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    }
+  },
+  "paths": {
+    "/api/license": {
+      "get": {
+        "tags": ["License"], "summary": "查目前 license 狀態（前端 banner 用）",
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LicenseStatus" } } } } }
+      }
+    },
+    "/api/license/key": {
+      "post": {
+        "tags": ["License"], "summary": "（offline）上傳 .key 內容",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["license"], "properties": { "license": { "type": "string" } }
+        } } } },
+        "responses": { "200": { "description": "OK，含 payload 預覽" }, "400": { "description": "簽章 / 格式錯誤" } }
+      },
+      "delete": {
+        "tags": ["License"], "summary": "（offline）移除本機 .key",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/license/revocation/refresh": {
+      "post": {
+        "tags": ["License"], "summary": "立刻向 License Server 拉新的 revocation list（offline mode 用）",
+        "responses": { "200": { "description": "{ ok, error? }" } }
+      }
+    },
+    "/api/license/online/login": {
+      "post": {
+        "tags": ["License"], "summary": "（online）轉去 License Server 登入 + 開始 heartbeat",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "properties": { "email": { "type": "string" }, "password": { "type": "string" } }
+        } } } },
+        "responses": { "200": { "description": "OK" }, "401": { "description": "認證失敗" } }
+      }
+    },
+    "/api/license/online/logout": {
+      "post": {
+        "tags": ["License"], "summary": "（online）登出 + 停 heartbeat",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/connection/test": {
+      "post": {
+        "tags": ["Connection"], "summary": "測連線 + 回 server version + 可看到的 databases",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "allOf": [
+            { "$ref": "#/components/schemas/ConnectionInfo" },
+            { "type": "object", "required": ["type"], "properties": { "type": { "$ref": "#/components/schemas/DbType" } } }
+          ]
+        } } } },
+        "responses": { "200": { "description": "OK，含 version + databases" } }
+      }
+    },
+    "/api/connection/tables": {
+      "post": {
+        "tags": ["Connection"], "summary": "列指定 database 內所有 tables",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["type", "connection"],
+          "properties": {
+            "type":       { "$ref": "#/components/schemas/DbType" },
+            "connection": { "$ref": "#/components/schemas/ConnectionInfo" }
+          }
+        } } } },
+        "responses": { "200": { "description": "{ tables: TableInfo[] }" } }
+      }
+    },
+    "/api/export": {
+      "post": {
+        "tags": ["Export"], "summary": "啟動 dump job",
+        "description": "Returns a jobId immediately; poll /api/jobs/{id} for progress / result.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["type", "connection", "databases"],
+          "properties": {
+            "type":       { "$ref": "#/components/schemas/DbType" },
+            "connection": { "$ref": "#/components/schemas/ConnectionInfo" },
+            "databases":  { "type": "array", "items": { "type": "string" } },
+            "options": {
+              "type": "object",
+              "properties": {
+                "tables":   { "type": "array", "items": { "type": "string" } },
+                "noData":   { "type": "boolean" },
+                "noSchema": { "type": "boolean" }
+              }
+            }
+          }
+        } } } },
+        "responses": {
+          "200": { "description": "{ jobId }" },
+          "403": { "description": "License feature gate（bulk_export / multi_db_count_max）" }
+        }
+      }
+    },
+    "/api/export/{jobId}/zip": {
+      "get": {
+        "tags": ["Export"], "summary": "下載多 DB 匯出的 dumps.zip",
+        "parameters": [{ "name": "jobId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "binary zip" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/import/inspect": {
+      "post": {
+        "tags": ["Import"], "summary": "上傳 SQL 檔 → 回 table 對照（檔內 vs 目標 DB 已存在）",
+        "requestBody": { "required": true, "content": { "multipart/form-data": { "schema": {
+          "type": "object",
+          "properties": {
+            "file": { "type": "string", "format": "binary" },
+            "meta": { "type": "string", "description": "JSON: { type, connection }" }
+          }
+        } } } },
+        "responses": { "200": { "description": "{ uploadId, fileTables, dbTables, diff }" } }
+      }
+    },
+    "/api/import/run": {
+      "post": {
+        "tags": ["Import"], "summary": "執行 import（可選 --tables 子集）",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["type", "connection", "uploadId"],
+          "properties": {
+            "type":       { "$ref": "#/components/schemas/DbType" },
+            "connection": { "$ref": "#/components/schemas/ConnectionInfo" },
+            "uploadId":   { "type": "string" },
+            "tables":     { "type": "array", "items": { "type": "string" } }
+          }
+        } } } },
+        "responses": { "200": { "description": "{ jobId }" } }
+      }
+    },
+    "/api/jobs/{id}": {
+      "get": {
+        "tags": ["Jobs"], "summary": "查 job 狀態 + log",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobStatus" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/project/backup": {
+      "post": {
+        "tags": ["Project"], "summary": "備份 code (Git) + DB + Supabase Storage 三層到 backup.zip",
+        "responses": { "200": { "description": "{ jobId }" }, "403": { "description": "License feature gate（project_backup）" } }
+      }
+    },
+    "/api/project/restore": {
+      "post": {
+        "tags": ["Project"], "summary": "從 backup.zip 還原",
+        "responses": { "200": { "description": "{ jobId }" } }
+      }
+    },
+    "/api/schedule": {
+      "get": {
+        "tags": ["Schedule"], "summary": "列所有排程備份",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Schedule"], "summary": "新增排程備份",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["name", "expr", "type", "connection", "databases"],
+          "properties": {
+            "name":       { "type": "string" },
+            "expr":       { "type": "string", "description": "例：'every 6 hours' / 'daily at 02:00' / 'every 30 minutes'" },
+            "type":       { "$ref": "#/components/schemas/DbType" },
+            "connection": { "$ref": "#/components/schemas/ConnectionInfo" },
+            "databases":  { "type": "array", "items": { "type": "string" } },
+            "active":     { "type": "boolean", "default": true }
+          }
+        } } } },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/schedule/{id}": {
+      "patch": {
+        "tags": ["Schedule"], "summary": "改排程",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "delete": {
+        "tags": ["Schedule"], "summary": "刪排程",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/schedule/{id}/run-now": {
+      "post": {
+        "tags": ["Schedule"], "summary": "立刻跑一次",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "{ jobId }" } }
+      }
+    },
+    "/api/marketplace/preview": {
+      "post": {
+        "tags": ["Marketplace"], "summary": "預覽 GitHub repo 上的 plugin（驗 SHA-256 + Ed25519 簽章）",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["url"], "properties": { "url": { "type": "string", "format": "uri" } }
+        } } } },
+        "responses": {
+          "200": { "description": "{ source, manifest, signature, files }" },
+          "400": { "description": "URL 不是 github.com / manifest 損壞 / hash 不符" }
+        }
+      }
+    },
+    "/api/marketplace/install": {
+      "post": {
+        "tags": ["Marketplace"], "summary": "安裝 plugin（atomic：staging dir → rename）",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["url"],
+          "properties": {
+            "url":            { "type": "string", "format": "uri" },
+            "allowUnsigned":  { "type": "boolean", "default": false }
+          }
+        } } } },
+        "responses": { "200": { "description": "{ ok, installed, version, fileCount, signed, trusted }" } }
+      }
+    },
+    "/api/marketplace/installed": {
+      "get": {
+        "tags": ["Marketplace"], "summary": "已安裝的 plugin 清單",
+        "responses": { "200": { "description": "{ plugins: [...] }" } }
+      }
+    },
+    "/api/marketplace/trusted": {
+      "get": {
+        "tags": ["Marketplace"], "summary": "信任的 publisher 清單（含 fingerprint，不含 PEM）",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Marketplace"], "summary": "新增 trusted publisher",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["id", "pem"], "properties": { "id": { "type": "string" }, "pem": { "type": "string" } }
+        } } } },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/cross-db/preview-live": {
+      "post": {
+        "tags": ["Cross-DB"], "summary": "Dry-run：用 source.getSchema() 預測 target dialect 的 CREATE TABLE + warnings",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["sourceType", "sourceConn", "targetType"],
+          "properties": {
+            "sourceType": { "type": "string", "enum": ["mysql", "postgres", "sqlite", "supabase"] },
+            "sourceConn": { "$ref": "#/components/schemas/ConnectionInfo" },
+            "targetType": { "type": "string", "enum": ["mysql", "postgres", "sqlite", "supabase"] },
+            "tables":     { "type": "array", "items": { "type": "string" } }
+          }
+        } } } },
+        "responses": {
+          "200": { "description": "{ source, target, tableCount, warningCount, tables: [...] }" },
+          "400": { "description": "不支援的 dialect / source 與 target 相同" }
+        }
+      }
+    },
+    "/api/modules": {
+      "get": {
+        "tags": ["Modules"], "summary": "所有 route + adapter + plugin 的健康狀態",
+        "responses": { "200": { "description": "{ routes: {}, adapters: {}, plugins: {} }" } }
+      }
+    },
+    "/api/plugins/ui": {
+      "get": {
+        "tags": ["Modules"], "summary": "Plugin 貢獻的 UI cards / tabs / scripts（前端動態載入）",
+        "responses": { "200": { "description": "{ cards: [...], tabs: [...], scripts: [...] }" } }
+      }
+    }
+  }
+}

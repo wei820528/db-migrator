@@ -1,0 +1,412 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "DB Migrator — License Server API",
+    "version": "1.1.0",
+    "description": "Central license + billing server。提供帳號 / session / 付款 / 2FA / API tokens / offline-license revocation。\n\n供 DB Migrator client（node-express / dotnet8）連線驗證 license，也供 portal UI 自助管理。",
+    "contact": { "url": "https://github.com/wei820528/db-migrator" },
+    "license": { "name": "PolyForm Free Trial 1.0.0" }
+  },
+  "servers": [
+    { "url": "http://localhost:4000", "description": "Local dev" },
+    { "url": "https://license.example.com", "description": "Production placeholder" }
+  ],
+  "tags": [
+    { "name": "Auth",       "description": "註冊 / 登入 / heartbeat / 2FA challenge" },
+    { "name": "User",       "description": "自己的 plan / sessions / 改密碼 / 升級" },
+    { "name": "Tokens",     "description": "Long-running API tokens（cron / CI 用）" },
+    { "name": "2FA",        "description": "TOTP setup / enable / disable / verify-login" },
+    { "name": "Billing",    "description": "Stripe / 綠界 (ECPay) checkout" },
+    { "name": "Revocation", "description": "Offline-license remote kill switch（公開無 auth）" },
+    { "name": "Admin",      "description": "Admin web UI（cookie-auth）" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "兩種 token 都接受：\n- 一般 session token（從 /api/auth/login 拿，hex string）\n- API token，prefix `dbmt_`（從 /api/user/tokens 拿，給 cron / CI 用）"
+      },
+      "adminCookie": {
+        "type": "apiKey", "in": "cookie", "name": "admin_session",
+        "description": "Admin UI cookie，從 /api/admin/login 拿"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": { "error": { "type": "string" } },
+        "required": ["error"]
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "email":        { "type": "string", "format": "email" },
+          "plan":         { "type": "string", "enum": ["trial", "basic", "team", "enterprise"] },
+          "status":       { "type": "string", "enum": ["trial", "licensed", "free", "expired", "kicked", "offline"] },
+          "daysLeft":     { "type": "integer", "nullable": true },
+          "features":     { "type": "object", "additionalProperties": true },
+          "maxDevices":   { "type": "integer" },
+          "totpEnabled":  { "type": "boolean" }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id":          { "type": "string" },
+          "ip":          { "type": "string" },
+          "user_agent":  { "type": "string" },
+          "created_at":  { "type": "string", "format": "date-time" },
+          "last_seen":   { "type": "string", "format": "date-time" },
+          "isCurrent":   { "type": "boolean" }
+        }
+      },
+      "ApiToken": {
+        "type": "object",
+        "properties": {
+          "id":            { "type": "string", "format": "uuid" },
+          "name":          { "type": "string" },
+          "token_prefix":  { "type": "string", "description": "前 12 字元（含 dbmt_），display only" },
+          "scopes":        { "type": "array", "items": { "type": "string", "enum": ["user:read", "user:write"] } },
+          "created_at":    { "type": "string", "format": "date-time" },
+          "expires_at":    { "type": "string", "format": "date-time", "nullable": true },
+          "revoked_at":    { "type": "string", "format": "date-time", "nullable": true },
+          "last_used_at":  { "type": "string", "format": "date-time", "nullable": true },
+          "last_used_ip":  { "type": "string", "nullable": true },
+          "state":         { "type": "string", "enum": ["active", "revoked", "expired"] }
+        }
+      },
+      "ApiTokenWithSecret": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiToken" },
+          { "type": "object", "required": ["token"], "properties": {
+              "token": { "type": "string", "description": "完整 token — 僅此一次出現，server 不再保留明文" }
+          }}
+        ]
+      }
+    },
+    "responses": {
+      "Unauthorized": { "description": "未登入或 token 無效", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "BadRequest":   { "description": "請求格式錯誤",       "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Forbidden":    { "description": "驗證 OK 但權限不足", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "NotFound":     { "description": "資源不存在",          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": ["Auth"], "summary": "Health check",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": ["Auth"], "summary": "建立 trial 帳號",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["email", "password"],
+          "properties": { "email": { "type": "string", "format": "email" }, "password": { "type": "string", "minLength": 8 } }
+        } } } },
+        "responses": {
+          "200": { "description": "已寄出驗證信（或 dev mode 直接 verified）" },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "409": { "description": "email 已註冊" }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"], "summary": "登入；若 2FA 啟用會回 challenge",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["email", "password"],
+          "properties": { "email": { "type": "string" }, "password": { "type": "string" } }
+        } } } },
+        "responses": {
+          "200": {
+            "description": "登入成功（或 needs2fa）",
+            "content": { "application/json": { "schema": {
+              "oneOf": [
+                { "type": "object", "properties": { "token": { "type": "string" }, "user": { "$ref": "#/components/schemas/User" } } },
+                { "type": "object", "properties": { "needs2fa": { "type": "boolean" }, "challengeId": { "type": "string" } } }
+              ]
+            } } }
+          },
+          "401": { "description": "invalid credentials" },
+          "403": { "description": "email 尚未驗證 / IP 不在白名單 / plan 過期" }
+        }
+      }
+    },
+    "/api/auth/heartbeat": {
+      "post": {
+        "tags": ["Auth"], "summary": "Client app 心跳；IP 變了會被踢",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "session 有效" },
+          "401": { "description": "kicked（IP 變了 / 被 admin 踢 / token 失效）" }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": ["Auth"], "summary": "目前 session 詳細",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK" }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["Auth"], "summary": "登出（刪 server-side session）",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/auth/verify-email": {
+      "get": {
+        "tags": ["Auth"], "summary": "Email 驗證 link（從信中點進來）",
+        "parameters": [{ "name": "token", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "驗證成功 HTML" }, "404": { "description": "token 無效或已用過" } }
+      }
+    },
+    "/api/user/me": {
+      "get": {
+        "tags": ["User"], "summary": "自己的 plan / status / features",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } } }
+      }
+    },
+    "/api/user/sessions": {
+      "get": {
+        "tags": ["User"], "summary": "列出我的所有 session（含 isCurrent）",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": {
+          "type": "object", "properties": {
+            "currentSessionId": { "type": "string" },
+            "sessions": { "type": "array", "items": { "$ref": "#/components/schemas/Session" } }
+          }
+        } } } } }
+      }
+    },
+    "/api/user/sessions/{id}": {
+      "delete": {
+        "tags": ["User"], "summary": "踢出指定 session（只能踢自己的）",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/user/kick-others": {
+      "post": {
+        "tags": ["User"], "summary": "踢出除自己以外的所有 session",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": {
+          "type": "object", "properties": { "ok": { "type": "boolean" }, "kicked": { "type": "integer" } }
+        } } } } }
+      }
+    },
+    "/api/user/change-password": {
+      "post": {
+        "tags": ["User"], "summary": "改密碼（需要舊密碼）",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["oldPassword", "newPassword"],
+          "properties": { "oldPassword": { "type": "string" }, "newPassword": { "type": "string", "minLength": 8 } }
+        } } } },
+        "responses": { "200": { "description": "OK" }, "401": { "description": "old password wrong" } }
+      }
+    },
+    "/api/user/plans": {
+      "get": {
+        "tags": ["User"], "summary": "可見的 plan 清單（無 stripe price 細節）",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/user/upgrade": {
+      "post": {
+        "tags": ["User"], "summary": "升級 plan（轉去 Stripe checkout）",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["plan"], "properties": { "plan": { "type": "string" } }
+        } } } },
+        "responses": { "200": { "description": "Stripe checkout URL" } }
+      }
+    },
+    "/api/user/tokens": {
+      "post": {
+        "tags": ["Tokens"], "summary": "建立 long-running API token",
+        "description": "**只此一次**回傳明文 token。必須用互動 session（不能用另一個 API token）來建立 — 防 token-chain 攻擊。",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["name"],
+          "properties": {
+            "name":          { "type": "string", "maxLength": 64 },
+            "scopes":        { "type": "array", "items": { "type": "string", "enum": ["user:read", "user:write"] } },
+            "expiresInDays": { "type": "integer", "minimum": 1, "maximum": 3650, "nullable": true }
+          }
+        } } } },
+        "responses": {
+          "200": { "description": "建立成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiTokenWithSecret" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "403": { "description": "用了 API token 想建新 token（拒絕）" }
+        }
+      },
+      "get": {
+        "tags": ["Tokens"], "summary": "列出我的 token（無明文）",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": {
+          "type": "object", "properties": { "tokens": { "type": "array", "items": { "$ref": "#/components/schemas/ApiToken" } } }
+        } } } } }
+      }
+    },
+    "/api/user/tokens/{id}": {
+      "delete": {
+        "tags": ["Tokens"], "summary": "撤銷 token（立即生效）",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "OK" },
+          "403": { "description": "用了 API token 想撤銷（拒絕）" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/auth/2fa/setup": {
+      "post": {
+        "tags": ["2FA"], "summary": "產生 TOTP secret + QR code（尚未啟用）",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK，含 secret + uri + qrSvg" } }
+      }
+    },
+    "/api/auth/2fa/enable": {
+      "post": {
+        "tags": ["2FA"], "summary": "驗證第一個 TOTP code 並啟用",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["code"], "properties": { "code": { "type": "string" } }
+        } } } },
+        "responses": { "200": { "description": "已啟用" }, "401": { "description": "code 錯誤" } }
+      }
+    },
+    "/api/auth/2fa/disable": {
+      "post": {
+        "tags": ["2FA"], "summary": "停用 2FA（要 code 或 password 任一）",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "已停用" } }
+      }
+    },
+    "/api/auth/2fa/verify-login": {
+      "post": {
+        "tags": ["2FA"], "summary": "Login 第二步：拿 challengeId + code 換 session token",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["challengeId", "code"],
+          "properties": { "challengeId": { "type": "string" }, "code": { "type": "string" } }
+        } } } },
+        "responses": { "200": { "description": "OK，含 session token" }, "401": { "description": "challenge 過期或 code 錯誤" } }
+      }
+    },
+    "/api/billing/checkout": {
+      "post": {
+        "tags": ["Billing"], "summary": "建 Stripe Checkout Session",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["plan", "userToken"],
+          "properties": { "plan": { "type": "string" }, "userToken": { "type": "string" } }
+        } } } },
+        "responses": { "200": { "description": "checkout URL" } }
+      }
+    },
+    "/api/billing/webhook": {
+      "post": {
+        "tags": ["Billing"], "summary": "Stripe webhook（raw body，已驗 signature）",
+        "responses": { "200": { "description": "OK" }, "400": { "description": "signature 驗證失敗" } }
+      }
+    },
+    "/api/billing/status": {
+      "get": {
+        "tags": ["Billing"], "summary": "Stripe 整合狀態（admin UI 用）",
+        "responses": { "200": { "description": "{ enabled, webhookConfigured, prices }" } }
+      }
+    },
+    "/api/billing/ecpay/checkout": {
+      "post": {
+        "tags": ["Billing"], "summary": "建綠界（ECPay）checkout，回 form 讓 browser auto-submit",
+        "responses": { "200": { "description": "{ formAction, fields }" } }
+      }
+    },
+    "/api/billing/ecpay/return": {
+      "post": {
+        "tags": ["Billing"], "summary": "綠界 async server-to-server 通知（URL-encoded body，回 '1|OK'）",
+        "responses": { "200": { "description": "1|OK" }, "400": { "description": "CheckMacValue 不符" } }
+      }
+    },
+    "/api/billing/ecpay/status": {
+      "get": {
+        "tags": ["Billing"], "summary": "綠界整合狀態",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/revocation/list": {
+      "get": {
+        "tags": ["Revocation"], "summary": "公開（無 auth）— 已撤銷的 offline license id 清單",
+        "description": "Offline mode client 每 24h 來抓一次；命中自己的 lid → 拒絕啟動。Cache 5 min。",
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": {
+          "type": "object", "properties": {
+            "updated": { "type": "string", "format": "date-time" },
+            "count":   { "type": "integer" },
+            "revoked": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+            "details": { "type": "array", "items": { "type": "object", "properties": {
+              "id": { "type": "string" }, "revokedAt": { "type": "string", "format": "date-time", "nullable": true }, "reason": { "type": "string", "nullable": true }
+            } } }
+          }
+        } } } } }
+      }
+    },
+    "/api/revocation/check": {
+      "get": {
+        "tags": ["Revocation"], "summary": "公開 — 單一 license id 查詢",
+        "parameters": [{ "name": "id", "in": "query", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "{ id, known, revoked, revokedAt?, reason? }" } }
+      }
+    },
+    "/api/admin/login": {
+      "post": {
+        "tags": ["Admin"], "summary": "Admin login（set-cookie）",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["email", "password"],
+          "properties": { "email": { "type": "string" }, "password": { "type": "string" } }
+        } } } },
+        "responses": { "200": { "description": "OK，cookie set" }, "401": { "description": "invalid creds" } }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": ["Admin"], "summary": "列出 users",
+        "security": [{ "adminCookie": [] }],
+        "parameters": [{ "name": "search", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["Admin"], "summary": "建 user",
+        "security": [{ "adminCookie": [] }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/admin/licenses": {
+      "get": {
+        "tags": ["Admin"], "summary": "列出 issued offline licenses（remote kill switch）",
+        "security": [{ "adminCookie": [] }],
+        "parameters": [{ "name": "filter", "in": "query", "schema": { "type": "string", "enum": ["active", "revoked"] } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/admin/licenses/{id}/revoke": {
+      "post": {
+        "tags": ["Admin"], "summary": "撤銷 offline license",
+        "security": [{ "adminCookie": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": { "content": { "application/json": { "schema": {
+          "type": "object", "properties": { "reason": { "type": "string" } }
+        } } } },
+        "responses": { "200": { "description": "OK" } }
+      }
+    }
+  }
+}

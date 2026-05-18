@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>License Server — API Reference</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- Swagger UI distribution via CDN — zero npm deps -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui.css" />
+<style>
+  body { margin: 0; background: #fafafa; }
+  .topbar-banner {
+    background: #1f2937; color: white; padding: 10px 20px; font: 13px -apple-system, sans-serif;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .topbar-banner a { color: #93c5fd; text-decoration: none; }
+</style>
+</head>
+<body>
+  <div class="topbar-banner">
+    <span>DB Migrator <b>License Server</b> · OpenAPI 3.0 reference</span>
+    <span>
+      <a href="/openapi.json">Raw spec</a> ·
+      <a href="/admin/">Admin UI</a> ·
+      <a href="/admin/portal.html">Portal</a>
+    </span>
+  </div>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui-bundle.js" defer></script>
+  <script>
+    window.addEventListener('load', () => {
+      window.ui = SwaggerUIBundle({
+        url: '/openapi.json',
+        dom_id: '#swagger-ui',
+        presets: [ SwaggerUIBundle.presets.apis ],
+        layout: 'BaseLayout',
+        tryItOutEnabled: true,
+        persistAuthorization: true,
+      });
+    });
+  </script>
+</body>
+</html>
