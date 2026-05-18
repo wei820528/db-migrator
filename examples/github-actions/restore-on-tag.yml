@@ -1,0 +1,38 @@
+# 從 release artifact 還原 DB —— 範例
+# Tag 一個 'restore-*' 就會自動跑（例如 restore-2026-05-20）。
+# 適合 disaster recovery drill：先在 staging 還原昨天的 backup，確認 dump 有效。
+
+name: Restore DB from Artifact
+
+on:
+  push:
+    tags: ['restore-*']
+  workflow_dispatch:
+    inputs:
+      backup-run-id:
+        description: 'Run ID of the backup job whose artifact to restore'
+        required: true
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    environment: staging      # 強制走 environment protection rules
+    timeout-minutes: 30
+    steps:
+      - name: Download backup
+        uses: actions/download-artifact@v4
+        with:
+          name: db-backup-${{ inputs.backup-run-id }}
+          run-id: ${{ inputs.backup-run-id }}
+          path: ./backup
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: wei820528/db-migrator@v2
+        with:
+          command: import
+          type: mysql
+          host: ${{ secrets.STAGING_DB_HOST }}
+          user: ${{ secrets.STAGING_DB_USER }}
+          password: ${{ secrets.STAGING_DB_PASSWORD }}
+          database: ${{ secrets.STAGING_DB_NAME }}
+          file: ./backup/backup.sql

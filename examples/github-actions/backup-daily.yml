@@ -1,0 +1,45 @@
+# Daily DB backup via GitHub Actions —— 範例
+# 放到你自己 repo 的 .github/workflows/backup-daily.yml
+#
+# 需要的 repo secrets：
+#   DB_HOST / DB_USER / DB_PASSWORD / DB_NAME
+#
+# Artifact 預設保留 90 天；改用 actions/upload-artifact@v4 的 retention-days 調整。
+# 若要存到 S3，把 upload-artifact step 換成 aws-actions/configure-aws-credentials + aws s3 cp。
+
+name: Daily DB Backup
+
+on:
+  schedule:
+    - cron: '0 18 * * *'   # UTC 18:00 = 台灣時間 02:00 — 半夜備
+  workflow_dispatch:        # 手動觸發按鈕
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: wei820528/db-migrator@v2
+        with:
+          command: export
+          type: mysql
+          host: ${{ secrets.DB_HOST }}
+          user: ${{ secrets.DB_USER }}
+          password: ${{ secrets.DB_PASSWORD }}
+          database: ${{ secrets.DB_NAME }}
+          out: backup.sql
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: backup.sql
+          retention-days: 30
+
+      # 可選：到 Slack 通知
+      # - name: Notify Slack
+      #   if: failure()
+      #   uses: slackapi/slack-github-action@v1
+      #   with:
+      #     webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+      #     payload: '{"text":"⚠ DB backup failed for ${{ github.repository }}"}'

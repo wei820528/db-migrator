@@ -1,0 +1,76 @@
+# 跨 DB 遷移 dry-run preview — 任何 PR 改到 schema 相關檔案就跑
+# 把預測的 CREATE TABLE + warnings 印到 GitHub Action log。
+#
+# 配合 v2 Theme B：source = 現有 MySQL，target = 規劃中的 PostgreSQL。
+# 如果有 warning（型別 lossy、unsigned 拓寬之類）就讓 reviewer 看得到。
+
+name: Cross-DB Migration Preview
+
+on:
+  pull_request:
+    paths:
+      - 'migrations/**'
+      - 'db/schema/**'
+      - 'schema.sql'
+  workflow_dispatch:
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci
+          MYSQL_DATABASE: app
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -uroot -pci"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 套用你的 schema 到 service container
+      - name: Apply schema
+        run: mysql -h 127.0.0.1 -uroot -pci app < schema.sql
+
+      # 預測搬到 PostgreSQL 會怎樣
+      - uses: wei820528/db-migrator@v2
+        id: preview
+        with:
+          command: preview-crossdb
+          type: postgres                   # 必填，但 preview 用 source-* 為主
+          source-type: mysql
+          source-host: 127.0.0.1
+          source-port: '3306'
+          source-user: root
+          source-password: ci              # 是 service container 的 password，不算 secret
+          source-database: app
+          target-type: postgres
+          json: 'true'
+
+      # 把 preview 結果寫進 PR comment（需要 pull-requests: write 權限）
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const preview = JSON.parse(`${{ steps.preview.outputs.stdout }}`);
+            const lines = [
+              `## Cross-DB migration preview: \`${preview.source}\` → \`${preview.target}\``,
+              ``,
+              `- ${preview.tableCount} table(s)`,
+              `- **${preview.warningCount} warning(s)**`,
+              ``,
+              ...preview.tables.flatMap((t) => [
+                `### \`${t.table}\``,
+                ...t.columns
+                  .filter((c) => c.warnings.length > 0)
+                  .map((c) => `- ⚠ \`${c.name}\`: ${c.sourceType} → ${c.targetType} — ${c.warnings.join('; ')}`),
+              ]),
+            ];
+            await github.rest.issues.createComment({
+              ...context.repo, issue_number: context.issue.number,
+              body: lines.join('\n'),
+            });

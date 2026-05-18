@@ -49,16 +49,18 @@ v1 系列已收尾（7 adapter / plugin marketplace / online license / remote ki
 
 目前只有 web UI。v2 加 CLI 與 stable API，讓使用者把 dump/restore 寫進 cron / CI / scripts。
 
-| 子項 | 為什麼 | 工作量 |
+| Phase | 子項 | 狀態 |
 |---|---|---|
-| `dbmigrator` CLI（Node 二進位） | `dbmigrator export --type mysql --host x --to file.sql` | 中 |
-| 公開 REST API spec（OpenAPI） | 目前 endpoint 是內部用；公開後寫整合更容易 | 小 |
-| Webhook | dump 完成 / 排程失敗 → POST 到使用者指定 URL | 小 |
-| Long-running token | API token（非 session）用來給 cron / CI 拿 | 小 |
-| GitHub Action | `actions/db-migrator@v2` 包裝 CLI，CI 一鍵備份 | 小 |
+| 1 | `dbmigrator` CLI（8 subcommands，純 Node 零外部 deps） | ✓ done — 25 tests |
+| 2 | Long-running API tokens（`dbmt_…`，portal 自助管理 + scope guard） | ✓ done — 19 tests |
+| 3 | OpenAPI 3.0 specs + Swagger UI（兩個 server，CDN-loaded） | ✓ done — 14 tests |
+| 4 | HMAC-signed webhook delivery（job.done / failed / schedule.*）| ✓ done — 19 tests |
+| 5 | GitHub Action wrapper（composite + 3 example workflows）| ✓ done — 16 tests |
 
 **主要受眾**：DevOps 想把備份排進 CI/CD pipeline 的客戶。
 **最大風險**：CLI binary 跨平台打包（pkg / single-binary）有點吵；放棄 pkg 改純 Node script 簡單但要先裝 Node。
+
+**狀態**：✓ **完成** — Phase 1-5 全收尾、93 個 unit test。CLI / token / OpenAPI / webhook / GitHub Action 都在線。下一輪可考慮：(a) pkg / Bun 打包成單檔 binary，免裝 Node (b) license-server 的 admin webhook（user kicked / payment failed → POST 通知）(c) GraphQL 介面 alongside REST。
 
 ---
 

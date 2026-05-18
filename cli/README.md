@@ -96,9 +96,33 @@ dbmigrator restore-neutral --config pg.json --password-env PG_PW --file app.json
 | `DBMIGRATOR_DEBUG=1` | 出錯時印 stack trace |
 | 你自己的 `*_PW` 之類 | 被 `--password-env <NAME>` 引用，避免密碼出現在 process list / shell history |
 
-## Roadmap（v2 Theme C 其他 phase）
+## GitHub Action
 
-- Phase 2：long-running API token（給 cron 拿，token 有 scope 控制）
-- Phase 3：OpenAPI spec + Swagger UI（讓寫 client 的人有 single source of truth）
-- Phase 4：Webhook delivery（job 完成 / 排程失敗 → POST 通知，HMAC 簽名）
-- Phase 5：GitHub Action wrapper（`actions/db-migrator@v2` 一鍵在 CI 跑備份）
+`action.yml` 在 repo root，可以直接用：
+
+```yaml
+- uses: wei820528/db-migrator@v2
+  with:
+    command: export
+    type: mysql
+    host: ${{ secrets.DB_HOST }}
+    user: ${{ secrets.DB_USER }}
+    password: ${{ secrets.DB_PASSWORD }}
+    database: app
+    out: backup.sql
+
+- uses: actions/upload-artifact@v4
+  with: { name: backup, path: backup.sql }
+```
+
+完整範例（daily backup / cross-DB preview on PR / restore-on-tag）在 [examples/github-actions/](../examples/github-actions/)。
+
+## Theme C 全 5 phase 完成
+
+| Phase | 內容 |
+|---|---|
+| 1 | dbmigrator CLI（8 subcommands，零外部 deps） |
+| 2 | Long-running API tokens（`dbmt_…`，portal 自助管理） |
+| 3 | OpenAPI 3.0 specs + Swagger UI at `/api-docs/` |
+| 4 | HMAC-signed webhook delivery（job.done / job.failed / schedule.*）|
+| 5 | GitHub Action wrapper（composite action + 3 個 example workflow）|

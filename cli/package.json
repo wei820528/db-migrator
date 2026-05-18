@@ -7,7 +7,7 @@
     "dbmigrator": "bin/dbmigrator.js"
   },
   "scripts": {
-    "test": "node --test test/conn.test.js test/dispatch.test.js"
+    "test": "node --test test/conn.test.js test/dispatch.test.js test/github-action.test.js"
   },
   "engines": { "node": ">=18" }
 }

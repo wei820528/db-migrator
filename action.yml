@@ -1,0 +1,147 @@
+# DB Migrator GitHub Action — v2 Theme C Phase 5
+#
+# 用法（在你自己 repo 的 .github/workflows/*.yml）：
+#
+#   - uses: wei820528/db-migrator@v2
+#     with:
+#       command: export
+#       type: mysql
+#       host: ${{ secrets.DB_HOST }}
+#       user: ${{ secrets.DB_USER }}
+#       password: ${{ secrets.DB_PASSWORD }}
+#       database: app
+#       out: backup.sql
+#
+# 然後用 actions/upload-artifact@v4 把 backup.sql 上傳就行。
+#
+# 這是個 composite action：底下 install adapter deps → 跑 cli/bin/dbmigrator.js。
+# 所有支援的 subcommand 跟 dbmigrator CLI 一樣（test / export / import / dump-neutral /
+# restore-neutral / list-dbs / list-tables / preview-crossdb）。
+
+name: 'DB Migrator'
+description: 'Browser-free DB export / import / cross-DB migration — driven by the dbmigrator CLI inside CI'
+branding:
+  icon: 'database'
+  color: 'orange'
+
+inputs:
+  command:
+    description: 'Subcommand: test / list-dbs / list-tables / export / import / dump-neutral / restore-neutral / preview-crossdb'
+    required: true
+
+  # ── Connection ──
+  type:
+    description: 'mysql / postgres / mssql / sqlite / supabase / mongo / redis'
+    required: true
+  host:
+    description: 'Host / IP / Atlas URI / SQL Server "HOST\INSTANCE"'
+    required: false
+  port:
+    description: 'Port (driver default if omitted)'
+    required: false
+  user:
+    description: 'User'
+    required: false
+  password:
+    description: '**Pass via secrets!** Do not hard-code.'
+    required: false
+  database:
+    description: 'DB name'
+    required: false
+  path:
+    description: 'SQLite-only: file path'
+    required: false
+  ssl:
+    description: 'Enable SSL (true/false). Supabase 自動加'
+    required: false
+    default: 'false'
+  auth-mode:
+    description: 'MSSQL only: sql | windows'
+    required: false
+
+  # ── Per-command ──
+  out:
+    description: '(export / dump-neutral) Output file path'
+    required: false
+  file:
+    description: '(import / restore-neutral) Input file path'
+    required: false
+  tables:
+    description: 'Comma-separated subset of tables'
+    required: false
+  no-data:
+    description: '(export / dump-neutral) Schema only'
+    required: false
+    default: 'false'
+  no-schema:
+    description: '(export) Data only'
+    required: false
+    default: 'false'
+
+  # ── Cross-DB preview ──
+  source-type:
+    description: '(preview-crossdb) Source DB type'
+    required: false
+  source-host:
+    description: '(preview-crossdb)'
+    required: false
+  source-port:
+    description: '(preview-crossdb)'
+    required: false
+  source-user:
+    description: '(preview-crossdb)'
+    required: false
+  source-password:
+    description: '(preview-crossdb) **Pass via secrets!**'
+    required: false
+  source-database:
+    description: '(preview-crossdb)'
+    required: false
+  target-type:
+    description: '(preview-crossdb) Target DB type'
+    required: false
+
+  # ── Output / misc ──
+  json:
+    description: 'Emit JSON output instead of human-readable'
+    required: false
+    default: 'false'
+  quiet:
+    description: 'Suppress progress chatter'
+    required: false
+    default: 'false'
+  config:
+    description: 'Path to a JSON config file (alternative to individual flags)'
+    required: false
+
+outputs:
+  stdout:
+    description: 'Captured stdout from the CLI'
+    value: ${{ steps.run.outputs.stdout }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Node 20
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: '${{ github.action_path }}/node-express/package-lock.json'
+
+    - name: Install adapter deps (one-off, cached)
+      shell: bash
+      working-directory: ${{ github.action_path }}/node-express
+      run: npm ci --no-audit --no-fund --omit=optional
+
+    - name: Run dbmigrator CLI
+      id: run
+      shell: bash
+      env:
+        # All inputs forwarded as INPUT_* env vars by GitHub Actions automatically;
+        # the entry script reads them via process.env. Password specifically also
+        # exported so the CLI's --password-env path picks it up without ever
+        # showing the secret on the command line.
+        DBMIGRATOR_GHA_PASSWORD: ${{ inputs.password }}
+        DBMIGRATOR_GHA_SOURCE_PASSWORD: ${{ inputs.source-password }}
+      run: node "${{ github.action_path }}/cli/lib/github-action.js"
