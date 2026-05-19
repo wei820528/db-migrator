@@ -81,10 +81,11 @@ router.post('/', async (req, res) => {
         await adapter.dump(perDbConn, options, outFile, (line) => jobs.append(job.id, line));
 
         // 寫完之後 (in-place) 加密成 .enc，原檔砍掉避免 plaintext 留在 tmp
+        // 走 streaming 版本 — RAM O(1) 不論 dump 多大
         let finalFile = outFile;
         if (dumpPassword) {
           const encFile = outFile + '.enc';
-          dumpCrypto.encryptFile(outFile, encFile, dumpPassword);
+          await dumpCrypto.encryptStream(outFile, encFile, dumpPassword);
           fs.unlinkSync(outFile);
           finalFile = encFile;
           jobs.append(job.id, `Encrypted → ${path.basename(encFile)}`);

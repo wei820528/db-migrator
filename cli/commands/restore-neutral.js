@@ -42,7 +42,7 @@ exports.run = async (subArgs) => {
     });
     if (!pw) throw new Error('encrypted dump requires --password-env <VAR> or --password <pw>');
     const decPath = values.file + '.dec';
-    dc.decryptFile(values.file, decPath, pw);
+    await dc.decryptStream(values.file, decPath, pw);
     runPath = decPath;
     cleanupDecrypted = decPath;
     if (!values.quiet) console.error(`✓ decrypted → ${decPath}`);

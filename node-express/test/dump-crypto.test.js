@@ -193,3 +193,142 @@ test('deriveKey: different password → different key', () => {
   const k2 = dc._internal.deriveKey('pw-b', salt);
   assert.ok(!k1.equals(k2));
 });
+
+// ============ streaming encrypt / decrypt (Phase 3) ============
+
+test('encryptStream → decryptStream round-trip 還原原文', async () => {
+  const src = tmpFile('.sql');
+  const enc = tmpFile('.sql.enc');
+  const out = tmpFile('.sql');
+  try {
+    const data = Buffer.from('CREATE TABLE foo (id INT);\nINSERT INTO foo VALUES (1);\n'.repeat(50));
+    fs.writeFileSync(src, data);
+    await dc.encryptStream(src, enc, 'pw');
+    // output 應該是 valid DBMENC 檔
+    assert.strictEqual(dc.isEncryptedFile(enc), true);
+    await dc.decryptStream(enc, out, 'pw');
+    assert.deepStrictEqual(fs.readFileSync(out), data);
+  } finally {
+    [src, enc, out].forEach((p) => { try { fs.unlinkSync(p); } catch {} });
+  }
+});
+
+test('encryptStream 跟 encryptBuffer 互通：streaming encrypt → buffered decrypt', async () => {
+  const src = tmpFile('.sql');
+  const enc = tmpFile('.sql.enc');
+  try {
+    const data = Buffer.from('hello world');
+    fs.writeFileSync(src, data);
+    await dc.encryptStream(src, enc, 'pw');
+    const decoded = dc.decryptBuffer(fs.readFileSync(enc), 'pw');
+    assert.deepStrictEqual(decoded, data);
+  } finally {
+    [src, enc].forEach((p) => { try { fs.unlinkSync(p); } catch {} });
+  }
+});
+
+test('encryptBuffer → decryptStream 互通', async () => {
+  const enc = tmpFile('.enc');
+  const out = tmpFile('.sql');
+  try {
+    const data = Buffer.from('symmetric format check');
+    fs.writeFileSync(enc, dc.encryptBuffer(data, 'pw'));
+    await dc.decryptStream(enc, out, 'pw');
+    assert.deepStrictEqual(fs.readFileSync(out), data);
+  } finally {
+    [enc, out].forEach((p) => { try { fs.unlinkSync(p); } catch {} });
+  }
+});
+
+test('encryptStream: 8MB payload (>>64KB chunk size 確認 multi-chunk path)', async () => {
+  const src = tmpFile('.sql');
+  const enc = tmpFile('.sql.enc');
+  const out = tmpFile('.sql');
+  try {
+    const data = crypto.randomBytes(8 * 1024 * 1024);
+    fs.writeFileSync(src, data);
+    await dc.encryptStream(src, enc, 'pw');
+    await dc.decryptStream(enc, out, 'pw');
+    assert.deepStrictEqual(fs.readFileSync(out), data);
+  } finally {
+    [src, enc, out].forEach((p) => { try { fs.unlinkSync(p); } catch {} });
+  }
+});
+
+test('encryptStream: empty file round-trip', async () => {
+  const src = tmpFile('.sql');
+  const enc = tmpFile('.sql.enc');
+  const out = tmpFile('.sql');
+  try {
+    fs.writeFileSync(src, Buffer.alloc(0));
+    await dc.encryptStream(src, enc, 'pw');
+    // 即使 input 空，output 還是該有 header + tag (52 bytes)
+    assert.strictEqual(fs.statSync(enc).size, dc.HEADER_LEN + dc.TAG_LEN);
+    await dc.decryptStream(enc, out, 'pw');
+    assert.strictEqual(fs.statSync(out).size, 0);
+  } finally {
+    [src, enc, out].forEach((p) => { try { fs.unlinkSync(p); } catch {} });
+  }
+});
+
+test('decryptStream: wrong password → throw + 砍掉半成品 destPath', async () => {
+  const src = tmpFile('.sql');
+  const enc = tmpFile('.sql.enc');
+  const out = tmpFile('.sql');
+  try {
+    fs.writeFileSync(src, Buffer.from('data'));
+    await dc.encryptStream(src, enc, 'right-pw');
+    await assert.rejects(dc.decryptStream(enc, out, 'wrong-pw'), /decryption failed/);
+    // dest 不該存在（pipeline failure 已 cleanup）
+    assert.strictEqual(fs.existsSync(out), false);
+  } finally {
+    [src, enc, out].forEach((p) => { try { fs.unlinkSync(p); } catch {} });
+  }
+});
+
+test('decryptStream: tampered tail bytes → throw', async () => {
+  const src = tmpFile('.sql');
+  const enc = tmpFile('.sql.enc');
+  const out = tmpFile('.sql');
+  try {
+    fs.writeFileSync(src, crypto.randomBytes(1024));
+    await dc.encryptStream(src, enc, 'pw');
+    // 改最後一個 byte (auth tag)
+    const corrupted = fs.readFileSync(enc);
+    corrupted[corrupted.length - 1] ^= 0xff;
+    fs.writeFileSync(enc, corrupted);
+    await assert.rejects(dc.decryptStream(enc, out, 'pw'), /decryption failed/);
+  } finally {
+    [src, enc, out].forEach((p) => { try { fs.unlinkSync(p); } catch {} });
+  }
+});
+
+test('decryptStream: missing magic → throw', async () => {
+  const enc = tmpFile('.enc');
+  const out = tmpFile('.sql');
+  try {
+    fs.writeFileSync(enc, Buffer.concat([Buffer.from('NOTDBM01'), Buffer.alloc(100)]));
+    await assert.rejects(dc.decryptStream(enc, out, 'pw'), /missing magic header/);
+  } finally {
+    [enc, out].forEach((p) => { try { fs.unlinkSync(p); } catch {} });
+  }
+});
+
+test('decryptStream: truncated (less than HEADER+TAG) → throw', async () => {
+  const enc = tmpFile('.enc');
+  const out = tmpFile('.sql');
+  try {
+    fs.writeFileSync(enc, dc.MAGIC);   // 只有 magic，後面什麼都沒有
+    await assert.rejects(dc.decryptStream(enc, out, 'pw'), /too short|truncated/);
+  } finally {
+    [enc, out].forEach((p) => { try { fs.unlinkSync(p); } catch {} });
+  }
+});
+
+test('encryptStream: empty password throws', async () => {
+  const src = tmpFile('.sql');
+  try {
+    fs.writeFileSync(src, 'x');
+    await assert.rejects(dc.encryptStream(src, tmpFile('.enc'), ''), /non-empty/);
+  } finally { try { fs.unlinkSync(src); } catch {} }
+});

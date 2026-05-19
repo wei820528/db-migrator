@@ -66,7 +66,7 @@ exports.run = async (subArgs) => {
   if (dumpPassword) {
     const dc = require(path.join(__dirname, '..', '..', 'node-express', 'lib', 'dump-crypto'));
     const encOut = values.out + '.enc';
-    dc.encryptFile(values.out, encOut, dumpPassword);
+    await dc.encryptStream(values.out, encOut, dumpPassword);
     fs.unlinkSync(values.out);
     finalOut = encOut;
     finalBytes = fs.statSync(encOut).size;

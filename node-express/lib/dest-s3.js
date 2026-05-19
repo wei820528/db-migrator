@@ -71,6 +71,10 @@ function stripExt(name) {
   return ext ? name.slice(0, -ext.length) : name;
 }
 
+// 100MB 以上自動走 multipart upload (@aws-sdk/lib-storage Upload)
+// 之下走 PutObject — 不值得多 round trip overhead
+const MULTIPART_THRESHOLD = 100 * 1024 * 1024;
+
 // 真正 lazy require AWS SDK；只在 production runtime 跑到
 function lazyRequireClient(region, endpoint, forcePathStyle) {
   let mod;
@@ -89,32 +93,71 @@ function lazyRequireClient(region, endpoint, forcePathStyle) {
   return { client: new mod.S3Client(cfg), PutObjectCommand: mod.PutObjectCommand };
 }
 
-// 上傳檔到 S3。client / PutObjectCommand 可以由呼叫端注入（tests 用 stub）；
-// 沒注入就 lazy require 真的 SDK
+// Lazy require multipart helper — separate package。沒裝就 fallback PutObject
+function lazyRequireUpload() {
+  try {
+    return require('@aws-sdk/lib-storage').Upload;
+  } catch {
+    return null;
+  }
+}
+
+// 上傳檔到 S3。client / PutObjectCommand / Upload 都可由呼叫端注入（tests 用 stub）。
+// 沒注入就 lazy require 真的 SDK。File > MULTIPART_THRESHOLD 自動 multipart。
 async function uploadFile(srcPath, opts) {
   const { bucket, key, region, endpoint, forcePathStyle, log } = opts;
-  let { client, PutObjectCommand } = opts;
+  let { client, PutObjectCommand, Upload } = opts;
   if (!client || !PutObjectCommand) {
     ({ client, PutObjectCommand } = lazyRequireClient(region, endpoint, forcePathStyle));
   }
-  const bodyStream = fs.createReadStream(srcPath);
+  if (Upload === undefined) Upload = lazyRequireUpload();   // null = 嘗試過但沒裝
   const sizeBytes = fs.statSync(srcPath).size;
-  if (log) log(`Uploading ${srcPath} → s3://${bucket}/${key} (${sizeBytes} bytes)`);
+  const useMultipart = sizeBytes >= MULTIPART_THRESHOLD && !!Upload;
+  const ContentType = srcPath.endsWith('.enc') ? 'application/octet-stream' : 'text/plain';
+
+  if (log) {
+    const mode = useMultipart ? 'multipart' : 'PutObject';
+    log(`Uploading ${srcPath} → s3://${bucket}/${key} (${sizeBytes} bytes, ${mode})`);
+  }
+
+  if (useMultipart) {
+    const u = new Upload({
+      client,
+      params: { Bucket: bucket, Key: key, Body: fs.createReadStream(srcPath), ContentType },
+      queueSize: 4,
+      partSize: 5 * 1024 * 1024,    // 5MB parts (AWS minimum for multipart)
+      leavePartsOnError: false,
+    });
+    if (log && typeof u.on === 'function') {
+      let lastPct = -1;
+      u.on('httpUploadProgress', (p) => {
+        if (p.total && p.loaded) {
+          const pct = Math.floor((p.loaded / p.total) * 100);
+          if (pct - lastPct >= 10) { log(`  …${pct}%`); lastPct = pct; }
+        }
+      });
+    }
+    const r = await u.done();
+    if (log) log(`✓ uploaded s3://${bucket}/${key}` + (r.ETag ? ` (etag=${r.ETag})` : ''));
+    return { bucket, key, etag: r.ETag, sizeBytes, multipart: true };
+  }
+
   const cmd = new PutObjectCommand({
     Bucket: bucket,
     Key: key,
-    Body: bodyStream,
+    Body: fs.createReadStream(srcPath),
     ContentLength: sizeBytes,
-    ContentType: srcPath.endsWith('.enc') ? 'application/octet-stream' : 'text/plain',
+    ContentType,
   });
   const r = await client.send(cmd);
   if (log) log(`✓ uploaded s3://${bucket}/${key}` + (r.ETag ? ` (etag=${r.ETag})` : ''));
-  return { bucket, key, etag: r.ETag, sizeBytes };
+  return { bucket, key, etag: r.ETag, sizeBytes, multipart: false };
 }
 
 module.exports = {
   resolveS3Config,
   buildObjectKey,
   uploadFile,
-  _internal: { lazyRequireClient, pickExt, stripExt },
+  MULTIPART_THRESHOLD,
+  _internal: { lazyRequireClient, lazyRequireUpload, pickExt, stripExt },
 };

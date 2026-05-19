@@ -19,6 +19,8 @@
 
 const fs = require('fs');
 const crypto = require('crypto');
+const { pipeline } = require('stream/promises');
+const { Transform } = require('stream');
 
 const MAGIC = Buffer.from('DBMENC01', 'ascii');   // 8 bytes
 const SALT_LEN  = 16;
@@ -126,6 +128,147 @@ function resolvePassword({ password, passwordEnv } = {}) {
   return null;
 }
 
+// ============ streaming variants (Theme A Phase 3) ============
+//
+// 為什麼要 streaming：buffered encryptFile 一律 readFileSync 全檔 → RAM 是上限。
+// 100GB DB dump 直接炸。streaming 版每次只 process 64KB chunk，RAM O(1)。
+//
+// 加密 transform：
+//   先吐 [magic | salt | iv] header
+//   每個 chunk 走 cipher.update → 吐密文
+//   flush 時吐 cipher.final() + auth tag (16B)
+function _encryptTransform(password) {
+  const salt = crypto.randomBytes(SALT_LEN);
+  const iv   = crypto.randomBytes(IV_LEN);
+  const key  = deriveKey(password, salt);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  let headerWritten = false;
+  return new Transform({
+    transform(chunk, _enc, cb) {
+      try {
+        if (!headerWritten) {
+          this.push(MAGIC);
+          this.push(salt);
+          this.push(iv);
+          headerWritten = true;
+        }
+        cb(null, cipher.update(chunk));
+      } catch (e) { cb(e); }
+    },
+    flush(cb) {
+      try {
+        // 空檔 edge case — header 也要寫
+        if (!headerWritten) {
+          this.push(MAGIC); this.push(salt); this.push(iv);
+          headerWritten = true;
+        }
+        const final = cipher.final();
+        if (final.length) this.push(final);
+        this.push(cipher.getAuthTag());
+        cb();
+      } catch (e) { cb(e); }
+    },
+  });
+}
+
+async function encryptStream(srcPath, destPath, password) {
+  if (typeof password !== 'string' || password.length === 0) {
+    throw new Error('dump password must be a non-empty string');
+  }
+  const tx = _encryptTransform(password);
+  try {
+    await pipeline(
+      fs.createReadStream(srcPath),
+      tx,
+      fs.createWriteStream(destPath),
+    );
+  } catch (e) {
+    // 不留半成品；下游可能 retry
+    try { fs.unlinkSync(destPath); } catch {}
+    throw e;
+  }
+}
+
+// 解密 transform：
+//   先吃 HEADER_LEN bytes 拿 magic / salt / iv → 初始化 decipher
+//   後續一律「滾動保留尾端 TAG_LEN bytes」— 因為直到流結束才能確定哪 16B 是 tag
+//   flush 時把保留的 16B 設成 authTag 再 decipher.final()
+function _decryptTransform(password) {
+  let headerBuf = Buffer.alloc(0);
+  let tail = Buffer.alloc(0);         // 保留尾端 (最多 TAG_LEN) 給 setAuthTag
+  let decipher = null;
+
+  return new Transform({
+    transform(chunk, _enc, cb) {
+      try {
+        // 還沒湊滿 header — 先 buffer
+        if (!decipher) {
+          headerBuf = Buffer.concat([headerBuf, chunk]);
+          if (headerBuf.length < HEADER_LEN) return cb();
+          // 抓 header + 初始化
+          if (!headerBuf.subarray(0, MAGIC.length).equals(MAGIC)) {
+            return cb(new Error('not a DBMENC encrypted dump (missing magic header)'));
+          }
+          const salt = headerBuf.subarray(MAGIC.length, MAGIC.length + SALT_LEN);
+          const iv   = headerBuf.subarray(MAGIC.length + SALT_LEN, HEADER_LEN);
+          const key  = deriveKey(password, salt);
+          decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+          chunk = headerBuf.subarray(HEADER_LEN);
+          headerBuf = null;
+          if (chunk.length === 0) return cb();
+        }
+
+        // 把 chunk 加進 tail buffer，然後從前段切出可以放心 decrypt 的部分
+        const combined = Buffer.concat([tail, chunk]);
+        if (combined.length <= TAG_LEN) {
+          // 還無法保證哪 16B 是 tag，整段先保留
+          tail = combined;
+          return cb();
+        }
+        const safeLen = combined.length - TAG_LEN;
+        const safe = combined.subarray(0, safeLen);
+        tail = combined.subarray(safeLen);
+        cb(null, decipher.update(safe));
+      } catch (e) { cb(e); }
+    },
+    flush(cb) {
+      try {
+        if (!decipher) {
+          return cb(new Error('encrypted dump file too short / not a DBMENC file'));
+        }
+        if (tail.length !== TAG_LEN) {
+          return cb(new Error('encrypted dump truncated — expected 16-byte auth tag at end'));
+        }
+        decipher.setAuthTag(tail);
+        try {
+          const final = decipher.final();
+          if (final.length) this.push(final);
+          cb();
+        } catch {
+          cb(new Error('decryption failed — wrong password or corrupted file'));
+        }
+      } catch (e) { cb(e); }
+    },
+  });
+}
+
+async function decryptStream(srcPath, destPath, password) {
+  if (typeof password !== 'string' || password.length === 0) {
+    throw new Error('dump password must be a non-empty string');
+  }
+  const tx = _decryptTransform(password);
+  try {
+    await pipeline(
+      fs.createReadStream(srcPath),
+      tx,
+      fs.createWriteStream(destPath),
+    );
+  } catch (e) {
+    try { fs.unlinkSync(destPath); } catch {}
+    throw e;
+  }
+}
+
 module.exports = {
   MAGIC,
   HEADER_LEN,
@@ -136,6 +279,8 @@ module.exports = {
   encryptBuffer,
   decryptFile,
   decryptBuffer,
+  encryptStream,
+  decryptStream,
   resolvePassword,
-  _internal: { deriveKey },
+  _internal: { deriveKey, _encryptTransform, _decryptTransform },
 };

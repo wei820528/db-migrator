@@ -49,7 +49,7 @@ router.post('/inspect', upload.single('file'), async (req, res) => {
       }
       const decPath = workPath + '.dec';
       try {
-        dumpCrypto.decryptFile(workPath, decPath, pw);
+        await dumpCrypto.decryptStream(workPath, decPath, pw);
       } catch (e) {
         try { fs.unlinkSync(decPath); } catch {}
         return res.status(400).json({ error: e.message });

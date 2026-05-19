@@ -223,6 +223,103 @@ test('uploadFile: 沒注入 client 又沒裝 SDK → throw 訊息提示裝法', 
   } finally { fs.unlinkSync(tmp); }
 });
 
+// ============ Phase 3: multipart upload path ============
+
+// Stub Upload class — 模擬 @aws-sdk/lib-storage 的 Upload
+class FakeUpload {
+  constructor(opts) { this.opts = opts; FakeUpload.lastInstance = this; this._listeners = {}; }
+  on(ev, cb) { this._listeners[ev] = cb; return this; }
+  async done() {
+    // 排乾 Body stream（同 PutObject stub），然後 fire 一次 progress
+    if (this.opts.params.Body && typeof this.opts.params.Body.on === 'function') {
+      await new Promise((res, rej) => {
+        this.opts.params.Body.on('data', () => {});
+        this.opts.params.Body.on('end', res);
+        this.opts.params.Body.on('error', rej);
+      });
+    }
+    if (this._listeners.httpUploadProgress) {
+      this._listeners.httpUploadProgress({ loaded: 100, total: 100 });
+    }
+    return { ETag: '"multipart-etag"' };
+  }
+}
+
+test('uploadFile: 小檔 (< threshold) 走 PutObject 即使有 Upload', async () => {
+  const tmp = tmpFile('small payload');
+  try {
+    const sent = [];
+    const r = await dest.uploadFile(tmp, {
+      bucket: 'b', key: 'k',
+      client: makeStubClient(undefined, sent),
+      PutObjectCommand: FakePutObjectCommand,
+      Upload: FakeUpload,
+    });
+    assert.strictEqual(r.multipart, false);
+    assert.strictEqual(sent.length, 1);              // PutObject path 有 send
+    assert.strictEqual(FakeUpload.lastInstance, undefined);  // multipart 沒被 new
+  } finally { fs.unlinkSync(tmp); }
+});
+
+test('uploadFile: 大檔 (>= threshold) 走 multipart Upload', async () => {
+  const tmp = path.join(os.tmpdir(), `dbm-s3-big-${crypto.randomUUID()}.bin`);
+  // 寫剛好 threshold 大小（不要寫超大耗 RAM — 反正只是 stat check）
+  const fd = fs.openSync(tmp, 'w');
+  try {
+    fs.ftruncateSync(fd, dest.MULTIPART_THRESHOLD);  // sparse file，stat size 對得上
+  } finally { fs.closeSync(fd); }
+  try {
+    FakeUpload.lastInstance = undefined;
+    const sent = [];
+    const r = await dest.uploadFile(tmp, {
+      bucket: 'b', key: 'big.sql',
+      client: makeStubClient(undefined, sent),
+      PutObjectCommand: FakePutObjectCommand,
+      Upload: FakeUpload,
+    });
+    assert.strictEqual(r.multipart, true);
+    assert.strictEqual(r.etag, '"multipart-etag"');
+    assert.strictEqual(sent.length, 0);              // PutObject 沒被叫
+    assert.ok(FakeUpload.lastInstance);              // Upload 真的被 new
+    assert.strictEqual(FakeUpload.lastInstance.opts.params.Bucket, 'b');
+    assert.strictEqual(FakeUpload.lastInstance.opts.params.Key, 'big.sql');
+  } finally { fs.unlinkSync(tmp); }
+});
+
+test('uploadFile: 大檔但 Upload=null (lib-storage 沒裝) → fallback PutObject', async () => {
+  const tmp = path.join(os.tmpdir(), `dbm-s3-big-${crypto.randomUUID()}.bin`);
+  const fd = fs.openSync(tmp, 'w');
+  try { fs.ftruncateSync(fd, dest.MULTIPART_THRESHOLD); } finally { fs.closeSync(fd); }
+  try {
+    const sent = [];
+    const r = await dest.uploadFile(tmp, {
+      bucket: 'b', key: 'big.sql',
+      client: makeStubClient(undefined, sent),
+      PutObjectCommand: FakePutObjectCommand,
+      Upload: null,    // 明確說沒 lib-storage
+    });
+    assert.strictEqual(r.multipart, false);
+    assert.strictEqual(sent.length, 1);
+  } finally { fs.unlinkSync(tmp); }
+});
+
+test('uploadFile: multipart progress callback 被 log', async () => {
+  const tmp = path.join(os.tmpdir(), `dbm-s3-big-${crypto.randomUUID()}.bin`);
+  const fd = fs.openSync(tmp, 'w');
+  try { fs.ftruncateSync(fd, dest.MULTIPART_THRESHOLD); } finally { fs.closeSync(fd); }
+  try {
+    const lines = [];
+    await dest.uploadFile(tmp, {
+      bucket: 'b', key: 'k', log: (m) => lines.push(m),
+      client: makeStubClient(undefined, []),
+      PutObjectCommand: FakePutObjectCommand,
+      Upload: FakeUpload,
+    });
+    assert.ok(lines.some((l) => l.includes('multipart')), `no multipart marker in log: ${lines}`);
+    assert.ok(lines.some((l) => l.includes('100%')), `no progress marker in log: ${lines}`);
+  } finally { fs.unlinkSync(tmp); }
+});
+
 // ============ pickExt / stripExt edge cases ============
 
 test('pickExt: 認雙副檔名 .sql.enc', () => {
