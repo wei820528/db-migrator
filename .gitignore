@@ -75,6 +75,7 @@ dotnet8/license.key
 # Marketplace-installed plugins (always re-fetchable from GitHub)
 node-express/plugins/*/
 !node-express/plugins/hello/
+!node-express/plugins/sandboxed-hello/       # v2 Theme D in-repo demo plugin
 dotnet8/Plugins/marketplace/
 
 # Integration runtime

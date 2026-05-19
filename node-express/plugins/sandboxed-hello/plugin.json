@@ -1,0 +1,12 @@
+{
+  "name": "sandboxed-hello",
+  "version": "1.0.0",
+  "description": "v2 Theme D Phase 2 demo — plugin 跑在 worker_thread 內，唯一對外 API 是 ctx 物件。",
+  "author": "DB Migrator team",
+  "sandboxed": true,
+  "mount": "/api/plugin/sandboxed-hello",
+  "files": {
+    "node-express": ["index.js"]
+  },
+  "permissions": ["route"]
+}
