@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>擴充點 — DB Migrator 可擴充項目清單</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<script src="docs-nav.js"></script>
+<div class="hero">
+  <h1>🔌 擴充點</h1>
+  <p>DB Migrator 目前所有可擴充 / 可注入的接口清單。給想加新 DB、新 plugin、新 event、新 CLI 命令的人看 — 列出每個擴充點的「在哪、契約、最小範例、注意事項」。</p>
+  <a class="back" href="方案首頁.html">← 文件首頁</a>
+</div>
+<main>
+
+<div class="card">
+  <h2>📋 章節導覽</h2>
+  <div class="toc">
+    <ul>
+      <li><a href="#overview">整體擴充模型</a></li>
+      <li><a href="#db-adapter">1. 新增 DB Adapter</a></li>
+      <li><a href="#plugin-legacy">2. Plugin — Legacy in-process</a></li>
+      <li><a href="#plugin-sandboxed">3. Plugin — Sandboxed worker</a></li>
+      <li><a href="#plugin-marketplace">4. Plugin marketplace 發佈</a></li>
+      <li><a href="#crossdb-dialect">5. Cross-DB 加新方言</a></li>
+      <li><a href="#license-mode">6. License 模式</a></li>
+      <li><a href="#webhook-events">7. Webhook events</a></li>
+      <li><a href="#api-scopes">8. API token scopes</a></li>
+      <li><a href="#plugin-perms">9. Plugin permission</a></li>
+      <li><a href="#cli-commands">10. CLI subcommand</a></li>
+      <li><a href="#gha-inputs">11. GitHub Action inputs</a></li>
+      <li><a href="#payment-providers">12. 付款 provider</a></li>
+      <li><a href="#openapi-tags">13. OpenAPI tag / endpoint</a></li>
+      <li><a href="#ui-tabs">14. UI tab</a></li>
+      <li><a href="#summary">擴充點摘要表</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="card" id="overview">
+  <h2>整體擴充模型</h2>
+  <p>DB Migrator 故意分了幾種擴充強度，挑你需要的最弱那個就好（弱 = 影響範圍小、出錯不會弄爆別的）：</p>
+  <table>
+    <tr><th>強度</th><th>方式</th><th>需要重啟嗎</th><th>影響範圍</th></tr>
+    <tr><td>1. 設定檔</td><td>修 <code>plans.js</code> / env vars</td><td>是（license-server）</td><td>該 server</td></tr>
+    <tr><td>2. Plugin (legacy)</td><td>丟 <code>.js</code> 進 plugins/</td><td>否 (hot reload)</td><td>整個 process，full Node access</td></tr>
+    <tr><td>3. Plugin (sandboxed)</td><td>plugin.json + <code>sandboxed:true</code></td><td>否</td><td>worker_thread，crash 隔離</td></tr>
+    <tr><td>4. Plugin marketplace</td><td>GitHub repo + <code>sign-plugin.js</code> 簽</td><td>否</td><td>使用者裝才生效</td></tr>
+    <tr><td>5. Fork repo</td><td>git fork + 改 source</td><td>是</td><td>無上限</td></tr>
+  </table>
+  <p>絕大多數新功能用 <b>plugin (sandboxed)</b> 就夠了；要加新 DB type 才需要碰 adapter（fork 或 plugin 的 adapter capability）。</p>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="db-adapter">
+  <h2>1. 新增 DB Adapter（支援新的 DB 類型）</h2>
+
+  <h3>位置</h3>
+  <ul>
+    <li>Node 版：<code>node-express/adapters/&lt;type&gt;.js</code>，註冊在 <code>adapters/index.js</code></li>
+    <li>.NET 版：<code>dotnet8/Adapters/&lt;Type&gt;Adapter.cs</code>，註冊在 <code>Adapters/IDatabaseAdapter.cs</code> 的 <code>AdapterRegistry</code></li>
+  </ul>
+
+  <h3>契約（必須實作的方法）</h3>
+  <pre><code>// node-express/adapters/&lt;name&gt;.js
+module.exports = {
+  type: 'myhouse-db',
+  async testConnection(conn)         { return { ok, version, databases? }; },
+  async listTables(conn)             { return [{ name, rowEstimate }]; },
+  async dump(conn, opts, out, onProg){ /* 寫 SQL/JSONL 進 out 檔 */ },
+  async restore(conn, file, onProg)  { /* 讀檔還原 */ },
+  parseTableNamesFromDump(file)      { return ['table1', 'table2']; },
+
+  // 可選：自家 dump 格式時的篩選邏輯（不實作就 fallback 到 SQL splitter）
+  filterDumpByTables(text, wanted)   { return { sql, kept, skipped }; },
+
+  // 可選：v2 Theme B 跨 DB migration 才需要
+  async getSchema(conn, tables?)     { return [{ name, columns: [...IR...] }]; },
+  async dumpNeutral(conn, opts, out, onProg)    { /* 寫 neutral JSONL */ },
+  async restoreNeutral(conn, file, onProg)      { /* 讀 neutral 還原 */ },
+};</code></pre>
+
+  <h3>註冊</h3>
+  <p>編輯 <code>adapters/index.js</code> 的 <code>loaders</code> 物件加一行：</p>
+  <pre><code>const loaders = {
+  mysql:    () =&gt; require('./mysql'),
+  ...,
+  'myhouse-db': () =&gt; require('./myhouse-db'),    // ← 加這個
+};</code></pre>
+
+  <h3>UI 端</h3>
+  <p>編輯 <code>public/index.html</code> 加一張 <code>&lt;button class="card" data-type="myhouse-db"&gt;</code>；編輯 <code>public/modules/state.js</code> 在 <code>HOST_HINTS</code> 跟 <code>TYPE_DEFAULTS</code> 加 entry。或者透過 <b>plugin</b> 的 <code>ui.cards</code> 動態注入，連 HTML 都不用改。</p>
+
+  <h3>已實作的 adapter 可當範本</h3>
+  <ul>
+    <li>SQL 系：mysql / postgres / mssql / sqlite</li>
+    <li>NoSQL：mongo / redis（要實作 <code>filterDumpByTables</code>，因為 dump 不是 SQL 字串）</li>
+    <li>別名：supabase 直接重用 postgres adapter</li>
+  </ul>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="plugin-legacy">
+  <h2>2. Plugin — Legacy in-process（最快、最不安全）</h2>
+
+  <h3>位置</h3>
+  <p>丟 <code>node-express/plugins/&lt;name&gt;/index.js</code>（或單檔 <code>plugins/&lt;name&gt;.js</code>），自動 hot reload。.NET 版是 <code>dotnet8/Plugins/&lt;Name&gt;.cs</code>，重建生效。</p>
+
+  <h3>契約</h3>
+  <pre><code>// 一個 plugin 可同時 export 任何組合：
+module.exports = {
+  mount:  '/api/foo',
+  router: require('express').Router().get('/', (req, res) =&gt; res.json({ok: true})),
+  adapter: { type: 'foo-db', handler: { testConnection, listTables, ... } },
+  ui: {
+    cards: [{ type: 'foo-db', title: 'Foo DB', sub: 'demo', port: '0' }],
+    tabs:  [{ id: 'foo-tab', label: 'Foo Tools', html: '...', scripts: ['/plugins/static/foo/x.js'] }],
+    scripts: ['/plugins/static/foo/init.js'],
+  },
+  static: 'public',  // 服務 plugins/foo/public/* 在 /plugins/static/foo/*
+};</code></pre>
+
+  <h3>注意</h3>
+  <ul>
+    <li>完整 Node.js 存取 — 可以 <code>require('fs')</code> 為所欲為。<b>只給可信來源寫的 plugin 用</b></li>
+    <li>跟主 process 共享 event loop — plugin <code>while(true){}</code> 會卡死整個 server</li>
+    <li>Plugin throw 沒抓會 take down main server</li>
+    <li>適合 dev / 自己內部的小工具；對外發佈請用下方 sandboxed 模式</li>
+  </ul>
+
+  <p>範本：[plugins/hello/index.js](../node-express/plugins/hello/index.js)</p>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="plugin-sandboxed">
+  <h2>3. Plugin — Sandboxed worker_thread（v2 Theme D Phase 2+3）</h2>
+
+  <h3>觸發方式</h3>
+  <p>Plugin 資料夾內放 <code>plugin.json</code>，含 <code>"sandboxed": true</code>。pluginHost 會走 worker_thread 路徑載入。</p>
+
+  <h3>契約變更</h3>
+  <p>跟 legacy 不一樣：plugin 必須 <b>export 一個 function(ctx)</b>，不是 object。Plugin 對外唯一通道是 <code>ctx</code> 物件。</p>
+  <pre><code>// plugins/&lt;name&gt;/index.js
+module.exports = function (ctx) {
+  ctx.log('booted');
+
+  ctx.route.mount('GET', '/', async (req) =&gt; {
+    return { status: 200, body: { ok: true, params: req.params } };
+  });
+  // path 支援 :named param，handler 拿到 req.params
+
+  ctx.route.mount('POST', '/echo/:id', async (req) =&gt; {
+    return { status: 200, headers: { 'X-Custom': 'yes' }, body: req.body };
+  });
+};</code></pre>
+
+  <h3>ctx 物件目前內容</h3>
+  <table>
+    <tr><th>欄位</th><th>用途</th></tr>
+    <tr><td><code>ctx.pluginName</code></td><td>自己的名字</td></tr>
+    <tr><td><code>ctx.permissions</code></td><td>granted permission 陣列</td></tr>
+    <tr><td><code>ctx.threadId</code></td><td>worker thread id（debug 用）</td></tr>
+    <tr><td><code>ctx.log(...) / .debug() / .info() / .warn() / .error()</code></td><td>跨 thread 印到 main console</td></tr>
+    <tr><td><code>ctx.route.mount(method, path, handler)</code></td><td>註冊 endpoint（要 <code>route</code> permission）</td></tr>
+    <tr><td><code>ctx.hasPermission(p)</code></td><td>檢查自己有沒有某個 perm</td></tr>
+  </table>
+
+  <h3>require() 受 gate 控制（v2 Theme D Phase 3）</h3>
+  <p>Plugin 自家檔案的 <code>require()</code> 會被 <code>plugin-worker.js</code> 攔 — 按 granted permissions 過濾：</p>
+  <ul>
+    <li><b>永遠通</b>：crypto / util / events / stream / buffer / url / path / querystring / assert / timers / string_decoder</li>
+    <li><code>fs:tmp</code> 或 <code>fs:plugin-dir</code> → 解鎖 fs, fs/promises</li>
+    <li><code>network</code> → 解鎖 http, https, http2, net, dns, tls, dgram</li>
+    <li><code>unrestricted</code> → 全開（legacy escape hatch）</li>
+    <li><b>絕對禁</b>（除非 unrestricted）：child_process, vm, cluster, os, worker_threads</li>
+  </ul>
+  <p>npm packages（非 builtin）跟 relative require（<code>./helper</code>）一律通；npm package 內部的 require 也通（不然依賴會炸）。</p>
+
+  <h3>限制</h3>
+  <ul>
+    <li>Phase 2/3 只支援 <b>route</b> — adapter / UI / static 還不能在 sandbox 用，要走 legacy 路徑</li>
+    <li>單一 request timeout 30s</li>
+    <li>Worker startup timeout 10s</li>
+    <li>仍未擋：<code>process.dlopen</code>、<code>SharedArrayBuffer + Atomics</code>、<code>new Worker(code,{eval:true})</code> 子 worker</li>
+  </ul>
+
+  <p>範本：[plugins/sandboxed-hello/](../node-express/plugins/sandboxed-hello/) 含 <code>/try-fs</code> demo 看 gate 動作。</p>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="plugin-marketplace">
+  <h2>4. Plugin marketplace 發佈（讓別人從 GitHub 一鍵裝你的 plugin）</h2>
+
+  <h3>流程</h3>
+  <ol>
+    <li>寫 plugin（legacy 或 sandboxed）跟 <code>plugin.json</code></li>
+    <li>用 <code>node license-tools/sign-plugin.js &lt;plugin-dir&gt;</code> 簽 — 自動算 SHA-256 + 用 license-tools 的 Ed25519 私鑰簽 manifest</li>
+    <li>Push 到 GitHub repo（public 或 private 都行，要能 raw 讀取）</li>
+    <li>使用者在 UI「外掛商店」tab 貼 <code>https://github.com/&lt;you&gt;/&lt;repo&gt;</code> → 預覽（含 SHA / 簽章 / permissions）→ 勾權限 → 安裝</li>
+  </ol>
+
+  <h3>plugin.json 完整 schema</h3>
+  <pre><code>{
+  "name":        "my-plugin",         // slug
+  "version":     "1.0.0",
+  "description": "...",
+  "author":      "...",
+  "sandboxed":   true,                 // 可選；true 則必須 export function(ctx)
+  "mount":       "/api/plugin/my-plugin", // 可選，sandboxed plugin 用
+  "files": {
+    "node-express": ["index.js", "src/helper.js"],
+    "dotnet8":      ["MyPlugin.cs"],     // 可選
+    "shared":       ["LICENSE"]          // 可選
+  },
+  "permissions": ["route", "ui:cards"],  // 11 種可選 - 見 §9
+  "hashes":      { ... },                // 由 sign-plugin.js 自動填
+  "signedAt":    "...",
+  "signature":   "..."                   // base64 Ed25519
+}</code></pre>
+
+  <h3>信任 publisher</h3>
+  <p>使用者預設只信任你 repo 內 <code>license-tools/public-key.pem</code> 那把（project-default）。要信任別人的 plugin publisher，admin 在 UI 加 PEM 到 <code>node-express/trusted-publishers.json</code>。未簽章 plugin 安裝時必須勾「我已檢查過原始碼」確認框。</p>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="crossdb-dialect">
+  <h2>5. Cross-DB migration 加新方言（v2 Theme B）</h2>
+
+  <p>目前支援 MySQL ↔ PostgreSQL ↔ SQLite 三角共 6 個方向。要加新方言（例如 MSSQL）需要：</p>
+
+  <h3>必改的檔</h3>
+  <ol>
+    <li><b>[normalize.js](../node-express/lib/cross-db/normalize.js)</b> — 加 <code>normalizeMssql(src)</code> 把 MSSQL 型別字串 → IR object</li>
+    <li><b>[emit.js](../node-express/lib/cross-db/emit.js)</b> — 加 <code>emitMssql(ir)</code> 把 IR → MSSQL DDL fragment（含 lossy warning）</li>
+    <li><b>[tables.js](../node-express/lib/cross-db/tables.js)</b> — <code>normalizeTarget()</code> + <code>buildColumnDdl()</code> 加 mssql case（autoIncrement / NOT NULL 規則）</li>
+    <li><b>Adapter 端</b>（<code>mssql.js</code>）加 <code>getSchema</code> + <code>dumpNeutral</code> + <code>restoreNeutral</code></li>
+    <li><b>Test</b>：複製 <code>cross-db.test.js</code> 的 normalize / emit 區段，補 mssql</li>
+    <li><b>Integration</b>：<code>integration/run-crossdb.js</code> 把 mssql 加進 SUPPORTED 陣列</li>
+  </ol>
+
+  <h3>IR 已知 kind</h3>
+  <p><code>int / float / decimal / string / text / binary / bool / date / datetime / time / json / uuid / enum / unknown</code>。如果你的方言有特殊型別（PG 的 inet / mac / tsvector），先 normalize 成 <code>unknown</code> + warning 即可。</p>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="license-mode">
+  <h2>6. License 模式</h2>
+
+  <p>三種 mode 透過 <code>LICENSE_MODE</code> env 切：</p>
+  <ul>
+    <li><code>offline</code>（預設）— Ed25519 簽章的 <code>license.key</code> 檔 + <code>.trial</code> 計時。32 天試用。實作在 [lib/license-offline.js](../node-express/lib/license-offline.js)</li>
+    <li><code>online</code> — heartbeat 到 license-server，IP 換了會被踢，feature gate 跟 plan 走。7 天試用。實作在 [lib/license-online.js](../node-express/lib/license-online.js)</li>
+    <li><code>disabled</code> — gate 完全關掉（dev only，會印警告）</li>
+  </ul>
+
+  <p>要加新 mode（例如 <code>jwt</code>）只要在 [lib/license.js](../node-express/lib/license.js) 的 mode dispatcher 加一支，回相同 shape：</p>
+  <pre><code>function getStatus() {
+  if (MODE === 'jwt') return { status, daysLeft, info, features, mode: 'jwt' };
+  ...
+}</code></pre>
+
+  <p>Gate 行為（哪些 endpoints 要授權才能用）在同檔的 <code>gate()</code> middleware。新 endpoint 預設都 gated；要 expose 給 unauthed 用（例如 <code>/openapi.json</code>）就放在 license gate <b>之前</b> 註冊。</p>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="webhook-events">
+  <h2>7. Webhook events</h2>
+
+  <p>目前 5 種 + ping：<code>job.done</code> / <code>job.failed</code> / <code>schedule.run.ok</code> / <code>schedule.run.failed</code> / <code>license.expired</code>。</p>
+
+  <h3>加新 event</h3>
+  <ol>
+    <li>編 [lib/webhooks.js](../node-express/lib/webhooks.js) 的 <code>KNOWN_EVENTS</code> 陣列</li>
+    <li>在事件發生處 call <code>require('./webhooks').emit(eventName, payload)</code>（fire-and-forget）</li>
+    <li>Webhook payload schema：<code>{ event, deliveryId, occurred_at, data: payload }</code></li>
+  </ol>
+
+  <h3>範例 — 加 <code>plugin.installed</code></h3>
+  <pre><code>// lib/webhooks.js
+const KNOWN_EVENTS = [..., 'plugin.installed'];
+
+// lib/marketplace.js install() 完成處
+require('./webhooks').emit('plugin.installed', { name, version, signed });</code></pre>
+
+  <p>Receiver 端驗章方式直接寫進 OpenAPI <code>/api/webhooks/{id}</code> 的 description；HMAC-SHA256，header <code>X-DBMigrator-Signature: sha256=&lt;hex&gt;</code>。</p>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="api-scopes">
+  <h2>8. API token scopes (license-server)</h2>
+
+  <p>目前兩種：<code>user:read</code>, <code>user:write</code>。Token 是 <code>dbmt_&lt;random&gt;</code> 格式，給 cron / CI / scripts 認證用。</p>
+
+  <h3>加新 scope</h3>
+  <ol>
+    <li>編 [license-server/lib/tokens.js](../license-server/lib/tokens.js) 的 <code>KNOWN_SCOPES</code> Set</li>
+    <li>在要保護的 endpoint 加 <code>requireScope('admin:read')</code> middleware（已在 [routes/user.js](../license-server/routes/user.js) 實作）</li>
+    <li>Portal UI 的建立 token form 加新 checkbox（[public/portal.html](../license-server/public/portal.html) 跟 [portal.js](../license-server/public/portal.js)）</li>
+  </ol>
+
+  <h3>常見要加的 scope</h3>
+  <ul>
+    <li><code>admin:read</code> — 列 users / sessions（給 dashboard）</li>
+    <li><code>admin:write</code> — 改 user plan / kick session（給 ops tool）</li>
+    <li><code>billing:read</code> — 看 invoices（給 accountant）</li>
+  </ul>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="plugin-perms">
+  <h2>9. Plugin permission（v2 Theme D Phase 1）</h2>
+
+  <p>11 種已知 permission，每個有 label / description / risk (1-3)。完整列表在 [lib/plugin-permissions.js](../node-express/lib/plugin-permissions.js) 的 <code>PERMISSIONS</code> 物件。</p>
+
+  <h3>加新 permission</h3>
+  <ol>
+    <li>編 <code>PERMISSIONS</code> 物件加一個 key（id 用 namespace:action 格式，例 <code>queue:publish</code>）</li>
+    <li>編 [license-tools/sign-plugin.js](../license-tools/sign-plugin.js) 的 <code>KNOWN_PERMISSIONS</code> Set 同步</li>
+    <li>實際 runtime enforcement 在哪：
+      <ul>
+        <li>Builtin require gate — 加進 [plugin-worker.js](../node-express/lib/plugin-worker.js) 的 <code>PERMISSION_BUILTINS</code> 對照表</li>
+        <li>SDK 函式 — 在 <code>buildCtx()</code> 內檢查 <code>grantedPermissions.includes(...)</code></li>
+        <li>Pre-install 檢查 — 已自動進 marketplace 的 consent UI（risk 顏色由 risk 欄決定）</li>
+      </ul>
+    </li>
+  </ol>
+
+  <h3>Risk 標準</h3>
+  <table>
+    <tr><th>Risk</th><th>意義</th><th>UI 顏色</th></tr>
+    <tr><td>1</td><td>純功能延伸，無資料 / 安全風險（route / ui:cards / static）</td><td>綠</td></tr>
+    <tr><td>2</td><td>可讀使用者資料但不能寫 / 對外（db:read / fs:tmp）</td><td>黃</td></tr>
+    <tr><td>3</td><td>可寫資料 / 對外網路 / 完整存取（db:write / network / unrestricted / adapter）</td><td>紅</td></tr>
+  </table>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="cli-commands">
+  <h2>10. CLI subcommand</h2>
+
+  <p>目前 8 個：test / list-dbs / list-tables / export / import / dump-neutral / restore-neutral / preview-crossdb。位置在 [cli/commands/](../cli/commands/)。</p>
+
+  <h3>加新 subcommand（範例：<code>dbmigrator schedule list</code>）</h3>
+  <ol>
+    <li>新建 <code>cli/commands/schedule.js</code>：</li>
+  </ol>
+
+  <pre><code>// cli/commands/schedule.js
+const path = require('path');
+const { parseConnArgs } = require('../lib/conn');
+
+exports.help = `dbmigrator schedule list  / add  / remove  ...`;
+
+exports.run = async (subArgs) =&gt; {
+  const { values, positionals } = parseConnArgs(subArgs, {
+    server: { type: 'string' },   // 額外 flag
+  });
+  // 你的邏輯
+  console.log('list of schedules...');
+  return 0;
+};</code></pre>
+
+  <ol start="2">
+    <li>編 [cli/bin/dbmigrator.js](../cli/bin/dbmigrator.js) 的 <code>COMMANDS</code> 物件加 entry：<code>'schedule': require('../commands/schedule')</code></li>
+    <li>更新頂層 help 字串（同檔下方 <code>printHelp()</code>）</li>
+    <li>寫 test：<code>cli/test/dispatch.test.js</code> 已經自動驗每個 cmd 都會回 help；conn / arg parsing 邏輯在 <code>conn.test.js</code></li>
+  </ol>
+
+  <h3>共用 connection flags</h3>
+  <p><code>parseConnArgs(subArgs, extraOptions)</code> 自動處理 <code>--type</code>, <code>--host</code>, <code>--port</code>, <code>--user</code>, <code>--password / --password-env</code>, <code>--database</code>, <code>--path</code>, <code>--ssl</code>, <code>--config &lt;file.json&gt;</code>, <code>--json</code>, <code>--quiet</code>。</p>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="gha-inputs">
+  <h2>11. GitHub Action inputs</h2>
+
+  <p>[action.yml](../action.yml) 是 composite action 入口，~25 個 input（連線 / 命令 / 開關）。[cli/lib/github-action.js](../cli/lib/github-action.js) 把 <code>INPUT_*</code> env 翻譯成 CLI args。</p>
+
+  <h3>加新 input（範例：<code>--region us-west-2</code> for S3 backup）</h3>
+  <ol>
+    <li>編 action.yml 在 <code>inputs:</code> 段加 <code>region: { description: ..., required: false }</code></li>
+    <li>編 [cli/lib/github-action.js](../cli/lib/github-action.js)：
+      <ul>
+        <li>加到 <code>PER_CMD_FLAGS</code> 陣列：<code>['--region', 'region']</code></li>
+        <li>或加 boolean: <code>BOOL_FLAGS</code></li>
+        <li>或如果是 source-* 用：<code>CROSSDB_FLAGS</code></li>
+      </ul>
+    </li>
+    <li>密碼類用 <code>env: { DBMIGRATOR_GHA_X_TOKEN: ${{ inputs.x-token }} }</code> + CLI 端對應 <code>--x-token-env DBMIGRATOR_GHA_X_TOKEN</code>，**永遠不要**直接放 args（會落到 process list）</li>
+    <li>編 [cli/test/github-action.test.js](../cli/test/github-action.test.js) — 最後一個測試會自動掃 action.yml 確認你新加的 input 有宣告</li>
+  </ol>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="payment-providers">
+  <h2>12. 付款 provider (license-server)</h2>
+
+  <p>目前 2 種：Stripe (信用卡 / 訂閱) 跟 ECPay 綠界（信用卡 / ATM / 超商）。位置：</p>
+  <ul>
+    <li>Stripe：[routes/stripe.js](../license-server/routes/stripe.js)（checkout + webhook，webhook 用 raw body 驗 signature）</li>
+    <li>ECPay：[routes/billing-ecpay.js](../license-server/routes/billing-ecpay.js) + [lib/ecpay.js](../license-server/lib/ecpay.js)（CheckMacValue SHA256）</li>
+  </ul>
+
+  <h3>加新 provider（例：PayPal）</h3>
+  <ol>
+    <li>新建 <code>routes/billing-paypal.js</code> 跟 <code>lib/paypal.js</code></li>
+    <li>編 [plans.js](../license-server/plans.js) 加 <code>paypal_plan_id</code> 欄位</li>
+    <li>編 [server.js](../license-server/server.js) <b>在 express.json() 之前</b> mount（若 webhook 需要 raw body）</li>
+    <li>編 Portal UI 加付款按鈕（[portal.html](../license-server/public/portal.html) + [portal.js](../license-server/public/portal.js) 既有的 Stripe / ECPay 按鈕當範本）</li>
+    <li>付款成功一律 call <code>db.prepare('UPDATE users SET plan = ?, expires_at = ? WHERE id = ?')</code> + <code>event_log</code> 進一筆 <code>plan_upgraded</code> event</li>
+  </ol>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="openapi-tags">
+  <h2>13. OpenAPI tag / endpoint</h2>
+
+  <p>兩份 spec：[node-express/openapi.json](../node-express/openapi.json)（10 個 tag）跟 [license-server/openapi.json](../license-server/openapi.json)（7 個 tag）。Swagger UI 在 <code>/api-docs/</code>（兩個 server 都有）。</p>
+
+  <h3>加新 endpoint 後要做的</h3>
+  <ol>
+    <li>在 <code>paths</code> 段加 <code>"/api/foo": { "post": { tags, summary, requestBody, responses } }</code></li>
+    <li>確認 tag 在 <code>tags</code> 陣列裡有定義（沒有就加）</li>
+    <li>用到的 schema 抽出來放 <code>components.schemas</code>（之後別的 endpoint 也能引用）</li>
+    <li>跑 <code>npm test --prefix node-express -- test/openapi.test.js</code>，會自動驗：
+      <ul>
+        <li>每個 op 有 tags + summary + responses</li>
+        <li>每個 path 在 server.js 都有實際 mount（catch「寫了 spec 但忘了實作」漂移）</li>
+      </ul>
+    </li>
+  </ol>
+
+  <h3>不要加在 spec 裡的 endpoint</h3>
+  <p>內部 only / debug only / 不穩定的 endpoint 可以不加 spec — 但記得在 code 註解標 <code>// not in openapi.json — internal</code>，免得未來人以為漏掉了。</p>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="ui-tabs">
+  <h2>14. UI tab / mode-switch 加項目</h2>
+
+  <p>主 UI 有 mode-switch（匯出 / 匯入 / 專案備份 / 排程 / 外掛商店 / 跨 DB 遷移 / Webhooks）。要加新 tab：</p>
+
+  <h3>三個地方要動</h3>
+  <ol>
+    <li><b>[index.html](../node-express/public/index.html)</b>：
+      <ul>
+        <li>mode-switch <code>&lt;div&gt;</code> 加 <code>&lt;button data-mode="foo"&gt;Foo&lt;/button&gt;</code></li>
+        <li>同檔加 <code>&lt;section id="step-foo" class="step mode-panel" hidden&gt;...&lt;/section&gt;</code></li>
+      </ul>
+    </li>
+    <li><b>新建 [public/modules/foo.js](../node-express/public/modules/)</b>：用 IIFE pattern 包，attach 到 <code>window.DBM.foo</code>，export <code>init()</code></li>
+    <li><b>編 [public/index.html](../node-express/public/index.html)</b> 的 <code>&lt;script&gt;</code> 段加 <code>&lt;script src="modules/foo.js"&gt;&lt;/script&gt;</code>；編 [public/app.js](../node-express/public/app.js) 加 <code>D.foo.init();</code></li>
+  </ol>
+
+  <h3>如果你的 tab 是給 plugin 動態貢獻的</h3>
+  <p>用 plugin 的 <code>ui.tabs: [{ id, label, html, scripts }]</code> 機制，不必改主 UI。<code>plugin-ui.js</code> 會自動掛進去。</p>
+</div>
+
+<!-- =============================================================== -->
+
+<div class="card" id="summary">
+  <h2>擴充點摘要表</h2>
+  <table>
+    <tr>
+      <th>想做的事</th>
+      <th>最少要改幾個檔</th>
+      <th>需要 fork？</th>
+    </tr>
+    <tr><td>支援新 DB type（私有，自己用）</td><td>1 個 adapter 檔 + index.js 註冊</td><td>否（fork 或 plugin adapter）</td></tr>
+    <tr><td>支援新 DB type（公開，給別人用）</td><td>同上 + UI 卡片 + state.js defaults</td><td>是（PR 比較好）</td></tr>
+    <tr><td>加個內部 tool 給自己 team 用</td><td>1 個 plugin .js（legacy）</td><td>否</td></tr>
+    <tr><td>發佈 plugin 給別人裝</td><td>plugin.json + sign-plugin.js + GitHub repo</td><td>否</td></tr>
+    <tr><td>讓 plugin 在 sandbox 跑</td><td>plugin.json 加 <code>sandboxed: true</code> + 改成 <code>function(ctx)</code> export</td><td>否</td></tr>
+    <tr><td>加新付款方式</td><td>1 個 route + 1 個 lib + plan.js 加 price ID + Portal UI 按鈕</td><td>是</td></tr>
+    <tr><td>加新 webhook 事件</td><td>KNOWN_EVENTS 陣列 + emit() 一行</td><td>是</td></tr>
+    <tr><td>加新 API token scope</td><td>KNOWN_SCOPES + Portal checkbox + requireScope middleware</td><td>是</td></tr>
+    <tr><td>加新 plugin permission</td><td>PERMISSIONS 物件 + sign-plugin 的 KNOWN_PERMISSIONS + runtime gate</td><td>是</td></tr>
+    <tr><td>加新 CLI subcommand</td><td>1 個 cli/commands/&lt;name&gt;.js + COMMANDS 註冊</td><td>否（cli/ 可獨立發佈）</td></tr>
+    <tr><td>加新 cross-DB 方言</td><td>normalize + emit + tables 三個檔加方言 case</td><td>是</td></tr>
+    <tr><td>加新 GHA input</td><td>action.yml + github-action.js flag 對照</td><td>是</td></tr>
+    <tr><td>UI 加新 tab（plugin 動態）</td><td>plugin 的 <code>ui.tabs</code></td><td>否</td></tr>
+    <tr><td>UI 加新 tab（內建）</td><td>index.html + modules/foo.js + app.js init</td><td>是</td></tr>
+  </table>
+
+  <p style="margin-top: 24px; padding: 16px; background: var(--accent-soft); border-radius: 8px;">
+    <b>📝 一句話總結</b>：日常 90% 的擴充需求用 <b>plugin (sandboxed)</b> 都能達到；要新 DB type 用 <b>plugin 的 adapter capability</b>；只有要動付款 / scope / permission / cross-DB 方言這種「跨多個元件」的擴充才需要 fork repo。
+  </p>
+</div>
+
+</main>
+</body>
+</html>

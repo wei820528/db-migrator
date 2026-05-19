@@ -13,6 +13,7 @@
     { href: '進度文件.html', label: '進度' },
     { href: '重構計畫.html', label: '重構' },
     { href: '優化擴充建議的計畫.html', label: '優化' },
+    { href: '擴充點.html', label: '擴充點' },
     { href: 'HANDOVER.html', label: '交接' },
   ];
 
