@@ -1,4 +1,4 @@
-// Plugin worker entry — v2 Theme D Phase 2 + Phase 3。
+// Plugin worker entry — v2 Theme D Phase 2 + Phase 3 + Phase 4。
 //
 // 在 worker_thread 內執行。從 parentPort 收到 `init` message 後 require plugin
 // 模組，把 SDK ctx inject 進去（plugin 應該 export 一個 function 而不是 object）。
@@ -16,14 +16,35 @@
 //       require('http')、'unrestricted' 則完全不擋）。npm packages 跟自家
 //       相對 require 永遠 pass through。
 //
+// Phase 4 加上：
+//   (5) Worker gate — wrap globalThis.Worker + worker_threads.Worker，plugin
+//       想 spawn nested worker 必須有 "unrestricted"。否則 throw 同時進 audit。
+//   (6) Persistent audit trail — require-denied、worker-spawn-attempt、
+//       route-mount、handler-error 都 emit `audit` message 給 host，host 寫 DB。
+//
 // 仍然沒擋（要 OS-level sandbox 才有辦法）：
 //   - process.dlopen / process.binding 之類 native escape
 //   - SharedArrayBuffer + Atomics 跨 thread 通信
-//   - 已經 require 過、cached 的 builtin 仍能用（worker_threads 自己就是）
 
-const { parentPort, threadId } = require('worker_threads');
+const workerThreads = require('worker_threads');
+const { parentPort, threadId } = workerThreads;
 const Module = require('module');
 const path = require('path');
+
+// Audit helper — 把 sensitive event 包成 message 傳給 main thread。
+// Main thread 端在 sandboxed-plugin-host.js 收 type:'audit' 寫 SQLite。
+// 故意做純函式（沒 import 任何 stateful）— easy to test。
+function emitAudit(event, severity, detail) {
+  if (!parentPort) return;
+  try {
+    parentPort.postMessage({
+      type: 'audit',
+      event,                            // require-denied / worker-spawn-attempt / etc.
+      severity,                         // info / warn / error
+      detail: detail || {},
+    });
+  } catch { /* postMessage 失敗就吞 — audit 不該 crash plugin */ }
+}
 
 let plugin = null;
 let pluginName = null;
@@ -85,7 +106,13 @@ function installRequireGate() {
         `[sandbox] plugin "${pluginName}" cannot require("${idStr}") — ` +
         `missing permission. Granted: [${grantedPermissions.join(', ') || '(none)'}]`
       );
-      // Audit log → main thread
+      // Phase 4: 寫 audit + 同時 log 一行（人類友善）
+      emitAudit('require-denied', 'warn', {
+        target: idStr,
+        suggestedPermission: suggestPermission(target),
+        grantedPermissions: grantedPermissions.slice(),
+        caller: callerFile,
+      });
       parentPort?.postMessage({
         type: 'log', level: 'warn',
         msg: `denied require("${idStr}") — needs ${suggestPermission(target)}`,
@@ -102,6 +129,58 @@ function suggestPermission(target) {
     if (Array.isArray(list) && list.includes(target)) return `"${perm}"`;
   }
   return '"unrestricted"';
+}
+
+// ============ Phase 4: Worker constructor gate ============
+//
+// Plugin 可能透過幾個路徑拿到 Worker class:
+//   a. require('worker_threads').Worker  → 被 Phase 3 require gate 攔（無 unrestricted）
+//   b. globalThis.Worker  → Node 21+ 才有 expose，未來保險
+//   c. 已經有 'unrestricted' permission 的 plugin 拿到 Worker — Phase 3 放行
+//
+// (c) 才是 Phase 4 要解決的：有 unrestricted 仍然要 audit + 預設 deny nested
+// worker（除非 plugin 額外設了 "worker-spawn" — 但 MVP 沒這個 perm，一律 deny）。
+// 這樣即使 plugin 拿到 unrestricted 還是不能無痕 spawn 子 worker 逃出 sandbox。
+function makeGatedWorker(OriginalWorker) {
+  function GatedWorker(...args) {
+    const argSummary = args.map((a) => {
+      if (typeof a === 'string') return { kind: 'path-or-code', preview: a.slice(0, 120) };
+      if (Buffer.isBuffer(a))    return { kind: 'buffer', length: a.length };
+      if (a && typeof a === 'object') {
+        return { kind: 'options', keys: Object.keys(a).slice(0, 10), eval: !!a.eval };
+      }
+      return { kind: typeof a };
+    });
+    emitAudit('worker-spawn-attempt', 'error', {
+      args: argSummary,
+      grantedPermissions: grantedPermissions.slice(),
+    });
+    // Phase 4 MVP：一律 deny nested worker — 即使 unrestricted。
+    // 將來要放就改成 grantedPermissions.includes('worker-spawn')。
+    throw new Error(
+      `[sandbox] plugin "${pluginName}" cannot spawn worker_threads.Worker — ` +
+      `nested workers are blocked to prevent sandbox escape`
+    );
+  }
+  // 讓 instanceof / static method lookup 仍然 work
+  GatedWorker.prototype = OriginalWorker.prototype;
+  Object.setPrototypeOf(GatedWorker, OriginalWorker);
+  return GatedWorker;
+}
+
+function installWorkerGate() {
+  const Original = workerThreads.Worker;
+  const Gated = makeGatedWorker(Original);
+
+  // (a) module cache 的 Worker — plugin require('worker_threads').Worker 拿這個
+  try {
+    Object.defineProperty(workerThreads, 'Worker', {
+      value: Gated, writable: true, configurable: true,
+    });
+  } catch { /* 某些 Node 版本可能不准 — 但 require gate 仍然會擋 */ }
+
+  // (b) globalThis.Worker — Node 21+ 才存在；都加保險
+  try { globalThis.Worker = Gated; } catch {}
 }
 
 // ============ SDK ctx ============
@@ -130,6 +209,7 @@ function buildCtx() {
         }
         if (typeof handler !== 'function') throw new Error('handler must be a function');
         registeredHandlers.push({ method: String(method).toUpperCase(), path, handler });
+        emitAudit('route-mount', 'info', { method: String(method).toUpperCase(), path });
       },
     },
     hasPermission(p) { return grantedPermissions.includes(p); },
@@ -150,6 +230,7 @@ if (parentPort) parentPort.on('message', async (msg) => {
       // 都會被攔）。但 require(msg.pluginPath) 自己這一次不會被攔 — 因為呼叫者
       // 不是 plugin 自家檔案。
       installRequireGate();
+      installWorkerGate();   // Phase 4 — 攔 nested worker spawn
       const pluginEntry = require(msg.pluginPath);
       if (typeof pluginEntry !== 'function') {
         throw new Error(
@@ -186,6 +267,9 @@ if (parentPort) parentPort.on('message', async (msg) => {
         const body = (result && 'body' in result) ? result.body : (result ?? null);
         parentPort.postMessage({ type: 'response', id: msg.id, status, headers, body });
       } catch (e) {
+        emitAudit('handler-error', 'error', {
+          method: msg.method, path: msg.path, message: e.message,
+        });
         parentPort.postMessage({
           type: 'response', id: msg.id, status: 500,
           body: { error: e.message, plugin: pluginName },
@@ -233,5 +317,9 @@ function matchParams(template, actual) {
 
 // 暴露給 test
 module.exports = {
-  _internal: { pathMatches, matchParams, builtinAllowed, ALWAYS_ALLOWED_BUILTINS, PERMISSION_BUILTINS },
+  _internal: {
+    pathMatches, matchParams, builtinAllowed,
+    ALWAYS_ALLOWED_BUILTINS, PERMISSION_BUILTINS,
+    makeGatedWorker,
+  },
 };

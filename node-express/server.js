@@ -65,6 +65,7 @@ safeMount('/api/schedule',   './routes/schedule',   'schedule');
 safeMount('/api/marketplace','./routes/marketplace', 'marketplace');
 safeMount('/api/cross-db',   './routes/cross-db',    'cross-db');
 safeMount('/api/webhooks',   './routes/webhooks',    'webhooks');
+safeMount('/api/plugin-audit','./routes/plugin-audit', 'plugin-audit');
 // Start scheduler tick loop (no-op if schedule route failed to load)
 try { require('./routes/schedule').startLoop?.(); } catch (e) { console.warn('[schedule] loop not started:', e.message); }
 

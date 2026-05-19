@@ -195,6 +195,20 @@ class PluginHost {
       pluginPath: modulePath,
       grantedPermissions,
       onLog: (level, msg) => console.log(`[plugin:${name}] ${level}: ${msg}`),
+      onAudit: (evt) => {
+        // Phase 4: 寫 SQLite。Lazy require — 避免測試環境跑 sandboxed-plugin
+        // host unit tests 時被 better-sqlite3 deps 影響
+        try {
+          require('./plugin-audit').append({
+            pluginName: evt.pluginName,
+            eventType: evt.event,
+            severity: evt.severity,
+            detail: evt.detail,
+          });
+        } catch (e) {
+          console.warn(`[plugin-audit] write failed: ${e.message}`);
+        }
+      },
     });
 
     try {

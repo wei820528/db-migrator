@@ -17,11 +17,13 @@ const REQUEST_TIMEOUT_MS = 30_000;        // 給 plugin 30 秒處理單一 reque
 const READY_TIMEOUT_MS = 10_000;          // worker 啟動上限
 
 class SandboxedPlugin {
-  constructor({ name, pluginPath, grantedPermissions, onLog }) {
+  constructor({ name, pluginPath, grantedPermissions, onLog, onAudit }) {
     this.name = name;
     this.pluginPath = pluginPath;
     this.grantedPermissions = grantedPermissions || [];
     this.onLog = onLog || ((level, msg) => console.log(`[plugin:${name}] ${level}: ${msg}`));
+    // Phase 4: audit callback。預設只 console.warn — 真正進 SQLite 由 pluginHost 注入
+    this.onAudit = onAudit || ((evt) => console.warn(`[audit:${name}] ${evt.event}`, evt.detail || {}));
     this.worker = null;
     this.pending = new Map();              // id → {resolve, reject, timer}
     this.routes = [];                      // [{method, path}]
@@ -115,6 +117,18 @@ class SandboxedPlugin {
   _onMessage(msg) {
     if (msg.type === 'ready')    { this._readyResolve?.(msg.routes); return; }
     if (msg.type === 'log')      { this.onLog(msg.level, msg.msg); return; }
+    if (msg.type === 'audit') {
+      // Phase 4: 把 audit event 傳給 host 注入的 callback（寫 SQLite）
+      try {
+        this.onAudit({
+          pluginName: this.name,
+          event: msg.event,
+          severity: msg.severity || 'info',
+          detail: msg.detail || {},
+        });
+      } catch (e) { /* audit callback 失敗不該 crash plugin host */ }
+      return;
+    }
     if (msg.type === 'response') {
       const p = this.pending.get(msg.id);
       if (!p) return;

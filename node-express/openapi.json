@@ -23,7 +23,8 @@
     { "name": "Cross-DB",    "description": "v2 Theme B — 跨 dialect 遷移預覽" },
     { "name": "Webhooks",    "description": "v2 Theme C Phase 4 — HMAC-signed event delivery（job.done / job.failed / schedule.*）" },
     { "name": "Observability","description": "v2 Theme E Phase 1 — Prometheus /metrics + structured /healthz；無 license gate" },
-    { "name": "Modules",     "description": "Adapter / route / plugin 健康狀態" }
+    { "name": "Modules",     "description": "Adapter / route / plugin 健康狀態" },
+    { "name": "PluginAudit", "description": "v2 Theme D Phase 4 — sandboxed plugin sensitive-event audit log（require denial / nested worker spawn / route mount / handler error）" }
   ],
   "components": {
     "schemas": {
@@ -500,6 +501,42 @@
       "get": {
         "tags": ["Modules"], "summary": "所有 route + adapter + plugin 的健康狀態",
         "responses": { "200": { "description": "{ routes: {}, adapters: {}, plugins: {} }" } }
+      }
+    },
+    "/api/plugin-audit": {
+      "get": {
+        "tags": ["PluginAudit"],
+        "summary": "Sandboxed plugin sensitive-event audit log",
+        "description": "Phase 4 — 列出 sandboxed plugin 觸發的 audit events：`require-denied`（plugin 想 require 沒授權的 builtin）、`worker-spawn-attempt`（plugin 想 spawn 子 worker 逃 sandbox）、`route-mount`（plugin 註冊 endpoint）、`handler-error`（plugin handler throw）。",
+        "parameters": [
+          { "name": "plugin",      "in": "query", "schema": { "type": "string" }, "description": "filter by plugin name" },
+          { "name": "event",       "in": "query", "schema": { "type": "string", "enum": ["require-denied", "worker-spawn-attempt", "route-mount", "handler-error"] } },
+          { "name": "since",       "in": "query", "schema": { "type": "integer" }, "description": "unix ms epoch — 只取這之後的" },
+          { "name": "minSeverity", "in": "query", "schema": { "type": "string", "enum": ["info", "warn", "error"] } },
+          { "name": "limit",       "in": "query", "schema": { "type": "integer", "default": 100, "maximum": 1000 } }
+        ],
+        "responses": { "200": { "description": "{ items: [{ id, ts, pluginName, eventType, severity, detail }], count }" } }
+      }
+    },
+    "/api/plugin-audit/count": {
+      "get": {
+        "tags": ["PluginAudit"], "summary": "只回筆數（dashboard 用，不拉 items）",
+        "parameters": [
+          { "name": "plugin", "in": "query", "schema": { "type": "string" } },
+          { "name": "event",  "in": "query", "schema": { "type": "string" } },
+          { "name": "since",  "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "{ count: integer }" } }
+      }
+    },
+    "/api/plugin-audit/prune": {
+      "post": {
+        "tags": ["PluginAudit"], "summary": "砍舊紀錄",
+        "requestBody": { "content": { "application/json": { "schema": {
+          "type": "object",
+          "properties": { "olderThanDays": { "type": "integer", "default": 30 } }
+        } } } },
+        "responses": { "200": { "description": "{ deleted: N }" } }
       }
     },
     "/api/plugins/ui": {
