@@ -89,16 +89,17 @@ Sample [plugins/sandboxed-hello/](node-express/plugins/sandboxed-hello/) 含 `/t
 
 把 client + license server 變得更「production-ready」。
 
-| 子項 | 為什麼 | 工作量 |
+| Phase | 子項 | 狀態 |
 |---|---|---|
-| Prometheus `/metrics` | 排程跑了幾次、平均 dump 大小 / 時間、license fetch 次數 | 小 |
-| Structured log (JSON) | 取代現在的 console.log，方便餵 ELK / Loki | 小 |
-| OpenTelemetry trace | dump / restore 變 span，能在 Jaeger 看 | 中 |
-| Health endpoint v2 | `/healthz` 帶 adapter + DB + license server 狀態 | 小 |
-| Admin alert webhook | License server 偵測到「24h 內有 N 個 kicked」就 webhook 通知 | 小 |
+| 1 | Prometheus `/metrics` + structured logger + `/healthz` v2（node-express 端） | ✓ done — 21 tests |
+| 2 | License-server `/metrics` + `/healthz`（含 critical vs informational components） | ✓ done — 12 tests |
+| — | OpenTelemetry trace | pending |
+| — | Admin alert webhook（License server 偵測 N 個 kicked → webhook） | pending |
 
 **主要受眾**：把 DB Migrator 當 internal tool 跑的中型團隊。
-**最大風險**：低；都是純加法，不會動現有功能。可當 v2.0 的「順手做」。
+**最大風險**：低；都是純加法，不會動現有功能。
+
+**狀態**：✓ **完成**（Phase 1+2）— 兩個 server 都吐 Prometheus metrics + healthz；hand-written exposition format zero-dep；critical-vs-informational 區分讓「SMTP 沒設」不會讓 license-server 看起來掛了。下一輪可考慮：(a) OTel trace（dump / restore 變 span） (b) Admin alert webhook（24h 內 N 個 kicked → 通知 ops）。
 
 ---
 

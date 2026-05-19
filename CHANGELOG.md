@@ -12,6 +12,44 @@ All notable changes to this project will be documented in this file.
 
 (no pending changes)
 
+## [1.3.0] - 2026-05-19
+
+v2 Theme D (plugin sandbox) Phase 1-3 + Theme E (observability) 全收尾。Plugin 現在跑在 worker_thread + per-permission `require()` gate，崩潰隔離；兩個 server 都吐 Prometheus `/metrics` 跟結構化 `/healthz`。Node unit test 240 → 309；License-server pure 53 → 66。
+
+### Added — Plugin sandbox (v2 Theme D, Phase 1-3)
+
+- **Capability manifest**（[plugin.json](node-express/plugins/sandboxed-hello/plugin.json) `permissions: []`）：11 種權限（`route` / `ui:cards` / `ui:tabs` / `static` / `adapter` / `db:read` / `db:write` / `fs:tmp` / `fs:plugin-dir` / `network` / `unrestricted`）；marketplace install UI 顯示權限清單要使用者勾選同意；signer 把同意過的權限寫進 `.granted-permissions.json`
+- **worker_thread 隔離**（[lib/plugin-worker.js](node-express/lib/plugin-worker.js)）：manifest `sandboxed: true` 的 plugin 跑在 worker；handler throw / `process.exit()` / event loop hang 都不會 take down main thread；SDK ctx（route + log） 透過 `parentPort.postMessage` bridge
+- **Require gate**：monkey-patch worker 內 `Module.prototype.require`，按 granted permissions allow-list Node builtins — 沒 `fs:*` 不能 require fs、沒 `network` 不能 require http / https / net / dgram / tls、沒 `unrestricted` 不能 require child_process / vm / worker_threads；npm packages 跟相對 require 都 pass through；denial 進 audit log
+- **`/api/plugin-audit`** endpoint：查看每個 plugin 被 gate 攔了哪些 require call
+- **Sample plugin** [plugins/sandboxed-hello/](node-express/plugins/sandboxed-hello/)：附 `/try-fs` route demo gate 動作
+- **Extensibility reference** [文件/擴充點.html](文件/擴充點.html)：14 個 extension point 一覽（adapter / 3 種 plugin / cross-DB dialect / license mode / webhook event / API scope / plugin permission / CLI subcommand / GHA input / payment provider / OpenAPI tag / UI tab）
+
+### Added — Observability (v2 Theme E, Phase 1-2)
+
+- **Prometheus `/metrics`**：兩個 server 都裝；hand-written exposition format zero-dep（[lib/metrics.js](node-express/lib/metrics.js)）— Counter / Gauge / Histogram，labels stable-sorted，escape rule 跟 spec 一致
+- **Node-express metrics**：`dbmigrator_jobs_total{kind, status}`、`dbmigrator_webhook_deliveries_total{event, status}`、`dbmigrator_plugin_status{plugin}`、`dbmigrator_module_status{module}`、`dbmigrator_uptime_seconds`；每 30s 自動 refresh status gauges
+- **License-server metrics**：`licenseserver_events_total{event}`（wrap 既有 `logEvent()`）、`licenseserver_users_total{plan}`、`licenseserver_sessions_active`、`licenseserver_api_tokens_total{state}`、`licenseserver_issued_licenses_total{state}`、`licenseserver_uptime_seconds`
+- **Structured `/healthz`**（[lib/healthz.js](node-express/lib/healthz.js)）：node-express 5 components（jobs_db / schedules_db / webhooks_db / adapters / license），license-server 4 components（license_db critical + smtp_config / stripe_config / ecpay_config informational）；只有 critical 失敗才回 503
+- **JSON logger** [lib/logger.js](node-express/lib/logger.js)：`LOG_FORMAT=json` 切 ELK / Loki 友善格式；預設 human-readable
+- **OpenAPI Observability tag**：兩個 spec 都加 `/metrics` + `/healthz` 文件
+
+### Changed
+
+- License gate 跟 plugin host 都讓 `/metrics` + `/healthz` 走 public（給 scraper / k8s liveness probe）
+- `pluginHost.loadOrReload()` 回傳新 metric 給 module status gauge 用
+
+### Fixed
+
+- `.gitignore` 太廣的 `bin/` 規則把 [cli/bin/dbmigrator.js](cli/bin/dbmigrator.js) 一起擋掉（commit fe144e5）— CLI 入口從沒被 push 上來；改成 scoped `dotnet8/**/bin/` + force-add cli/bin entry
+- 同一波的 `plugins/*/` 規則把 [plugins/sandboxed-hello/](node-express/plugins/sandboxed-hello/) 擋掉（commit f59d49d）— 加 untrack-exception
+
+### Docs
+
+- **繁體中文註解**：Theme D + E 全部新檔（warning/log 一律保留英文）
+- ROADMAP_v2.md：Theme E 標 ✓ 完成；Theme D Phase 1-3 標 ✓（Phase 4 audit log + Worker wrap pending）
+- 新增 [文件/擴充點.html](文件/擴充點.html) — 完整可擴充點 reference
+
 ## [1.2.0] - 2026-05-18
 
 v2 Theme B + Theme C 收尾：跨 DB 遷移管線（mysql ↔ postgres ↔ sqlite 6 個方向 e2e）+ 完整 automation 套件（CLI / API tokens / OpenAPI / webhook / GitHub Action）。Node unit test 87 → 240；CLI 全新 41 tests；License-server pure 34 → 53。
