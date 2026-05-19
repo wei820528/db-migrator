@@ -198,8 +198,49 @@ test('action.yml declares all the inputs the entry script reads', () => {
     'ssl', 'auth-mode', 'out', 'file', 'tables', 'no-data', 'no-schema',
     'source-type', 'source-host', 'source-port', 'source-user', 'source-password',
     'source-database', 'target-type', 'json', 'quiet', 'config',
+    'encrypt', 'dump-password',
   ]) {
     assert.ok(new RegExp(`^\\s*${name}:`, 'm').test(actionYml),
       `action.yml is missing input declaration for "${name}"`);
   }
+});
+
+// ============ Theme A Phase 1 — dump encryption flags ============
+
+test('buildArgs: --encrypt boolean flag threaded through', () => {
+  withInputs({
+    command: 'export', type: 'mysql', host: 'h', user: 'u', out: 'x.sql',
+    encrypt: 'true',
+  }, (gha) => {
+    const args = gha.buildArgs();
+    assert.ok(args.includes('--encrypt'));
+  });
+});
+
+test('buildArgs: dump-password routed to --password-env DBMIGRATOR_GHA_DUMP_PASSWORD', () => {
+  withInputs({
+    command: 'export', type: 'mysql', host: 'h', out: 'x.sql',
+    encrypt: 'true', 'dump-password': 'verysecret',
+  }, (gha) => {
+    const args = gha.buildArgs();
+    // password literal 不該出現在 args
+    assert.ok(!args.includes('verysecret'), `dump-password leaked into args: ${args}`);
+    // 應該變成 --password-env DBMIGRATOR_GHA_DUMP_PASSWORD
+    const i = args.indexOf('--password-env');
+    assert.ok(i >= 0);
+    assert.strictEqual(args[i + 1], 'DBMIGRATOR_GHA_DUMP_PASSWORD');
+  });
+});
+
+test('buildArgs: dump-password works on restore-neutral too', () => {
+  withInputs({
+    command: 'restore-neutral', type: 'postgres', host: 'h', database: 'db',
+    file: 'in.jsonl.enc', 'dump-password': 'pw',
+  }, (gha) => {
+    const args = gha.buildArgs();
+    assert.ok(!args.includes('pw'));
+    const i = args.indexOf('--password-env');
+    assert.ok(i >= 0);
+    assert.strictEqual(args[i + 1], 'DBMIGRATOR_GHA_DUMP_PASSWORD');
+  });
 });

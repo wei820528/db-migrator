@@ -5,15 +5,18 @@ const fs = require('fs');
 const { parseConnArgs } = require('../lib/conn');
 const { _adapterDir } = require('./test');
 
-exports.help = `dbmigrator dump-neutral --type <mysql|postgres|sqlite> --host <h> --database <name> --out <file.jsonl> [--tables a,b] [--no-data]
+exports.help = `dbmigrator dump-neutral --type <mysql|postgres|sqlite> --host <h> --database <name> --out <file.jsonl> [--tables a,b] [--no-data] [--encrypt --password-env VAR]
 
 Dump a database in cross-DB-friendly JSONL format. The output can be restored
 into any of mysql / postgres / sqlite via 'dbmigrator restore-neutral'.
 
 Options:
-  --out <file>     output JSONL path (required)
-  --tables <csv>   only these tables (else all)
-  --no-data        schema events only (no rows)
+  --out <file>            output JSONL path (required)
+  --tables <csv>          only these tables (else all)
+  --no-data               schema events only (no rows)
+  --encrypt               AES-256-GCM encrypt; output goes to <out>.enc
+  --password-env <VAR>    env var holding the dump password
+  --password <pw>         literal dump password（避免用）
 `;
 
 exports.run = async (subArgs) => {
@@ -21,8 +24,21 @@ exports.run = async (subArgs) => {
     out:        { type: 'string' },
     tables:     { type: 'string' },
     'no-data':  { type: 'boolean', default: false },
+    encrypt:        { type: 'boolean', default: false },
+    'password-env': { type: 'string' },
+    password:       { type: 'string' },
   });
   if (!values.out) throw new Error('--out <file.jsonl> required');
+
+  let dumpPassword = null;
+  if (values.encrypt) {
+    const dc = require(path.join(__dirname, '..', '..', 'node-express', 'lib', 'dump-crypto'));
+    dumpPassword = dc.resolvePassword({
+      password: values.password,
+      passwordEnv: values['password-env'],
+    });
+    if (!dumpPassword) throw new Error('--encrypt requires --password-env <VAR> or --password <pw>');
+  }
 
   const adapter = require(path.join(__dirname, '..', '..', 'node-express', 'adapters', _adapterDir(type)));
   if (typeof adapter.dumpNeutral !== 'function') {
@@ -34,8 +50,20 @@ exports.run = async (subArgs) => {
   };
   const onProgress = values.quiet ? null : (m) => console.error(m);
   await adapter.dumpNeutral(conn, options, values.out, onProgress);
-  const size = fs.statSync(values.out).size;
-  if (values.json) console.log(JSON.stringify({ ok: true, out: values.out, bytes: size }));
-  else if (!values.quiet) console.error(`✓ wrote ${values.out} (${size} bytes)`);
+
+  let finalOut = values.out;
+  let finalBytes = fs.statSync(values.out).size;
+  if (dumpPassword) {
+    const dc = require(path.join(__dirname, '..', '..', 'node-express', 'lib', 'dump-crypto'));
+    const encOut = values.out + '.enc';
+    dc.encryptFile(values.out, encOut, dumpPassword);
+    fs.unlinkSync(values.out);
+    finalOut = encOut;
+    finalBytes = fs.statSync(encOut).size;
+    if (!values.quiet) console.error(`✓ encrypted → ${encOut}`);
+  }
+
+  if (values.json) console.log(JSON.stringify({ ok: true, out: finalOut, bytes: finalBytes, encrypted: !!dumpPassword }));
+  else if (!values.quiet) console.error(`✓ wrote ${finalOut} (${finalBytes} bytes)`);
   return 0;
 };

@@ -78,6 +78,15 @@ inputs:
     required: false
     default: 'false'
 
+  # ── Dump encryption (Theme A Phase 1) ──
+  encrypt:
+    description: '(export / dump-neutral) AES-256-GCM encrypt the output; .enc suffix'
+    required: false
+    default: 'false'
+  dump-password:
+    description: '(export / import / dump-neutral / restore-neutral) **Pass via secrets!** Dump file password — separate from DB password'
+    required: false
+
   # ── Cross-DB preview ──
   source-type:
     description: '(preview-crossdb) Source DB type'
@@ -144,4 +153,5 @@ runs:
         # showing the secret on the command line.
         DBMIGRATOR_GHA_PASSWORD: ${{ inputs.password }}
         DBMIGRATOR_GHA_SOURCE_PASSWORD: ${{ inputs.source-password }}
+        DBMIGRATOR_GHA_DUMP_PASSWORD: ${{ inputs.dump-password }}
       run: node "${{ github.action_path }}/cli/lib/github-action.js"

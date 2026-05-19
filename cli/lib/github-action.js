@@ -45,6 +45,7 @@ const BOOL_FLAGS = [
   ['--no-schema', 'no-schema'],
   ['--json',      'json'],
   ['--quiet',     'quiet'],
+  ['--encrypt',   'encrypt'],
 ];
 
 // preview-crossdb 是特例 — 用一組 source-* flag
@@ -95,6 +96,11 @@ function buildArgs() {
   }
   if (isPreview && input('source-password') !== undefined) {
     args.push('--source-password-env', 'DBMIGRATOR_GHA_SOURCE_PASSWORD');
+  }
+
+  // Dump 加密 password 也走 env (export / import / dump-neutral / restore-neutral 共用)
+  if (input('dump-password') !== undefined) {
+    args.push('--password-env', 'DBMIGRATOR_GHA_DUMP_PASSWORD');
   }
 
   return args;

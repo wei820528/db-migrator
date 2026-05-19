@@ -5,6 +5,7 @@ const fs = require('fs');
 const { getAdapter } = require('../adapters');
 const { filterSqlByTables } = require('../adapters/_shared');
 const jobs = require('../lib/jobs');
+const dumpCrypto = require('../lib/dump-crypto');
 
 const TMP_DIR = path.join(__dirname, '..', 'tmp');
 const upload = multer({
@@ -22,13 +23,42 @@ function identQuoteFor(type) {
 }
 
 // Step 1: upload SQL file, return parsed table list + diff against target DB.
+// 上傳檔頭是 DBMENC magic 就先解密成原檔（password 走 DBMIGRATOR_DUMP_PASSWORD env）
 router.post('/inspect', upload.single('file'), async (req, res) => {
   try {
     const meta = JSON.parse(req.body.meta || '{}');
     const { type, connection } = meta;
     const adapter = getAdapter(type);
 
-    const fileTables = adapter.parseTableNamesFromDump(req.file.path);
+    let workPath = req.file.path;
+    let wasEncrypted = false;
+    if (dumpCrypto.isEncryptedFile(workPath)) {
+      wasEncrypted = true;
+      let pw;
+      try {
+        pw = dumpCrypto.resolvePassword({
+          passwordEnv: meta.passwordEnv || 'DBMIGRATOR_DUMP_PASSWORD',
+        });
+      } catch (e) {
+        return res.status(400).json({ error: `encrypted dump: ${e.message}` });
+      }
+      if (!pw) {
+        return res.status(400).json({
+          error: 'encrypted dump but no password — set DBMIGRATOR_DUMP_PASSWORD env',
+        });
+      }
+      const decPath = workPath + '.dec';
+      try {
+        dumpCrypto.decryptFile(workPath, decPath, pw);
+      } catch (e) {
+        try { fs.unlinkSync(decPath); } catch {}
+        return res.status(400).json({ error: e.message });
+      }
+      // 留 .dec 給 step 2 (run) 直接用，原 .enc 先留著當 audit；run 完一起刪
+      workPath = decPath;
+    }
+
+    const fileTables = adapter.parseTableNamesFromDump(workPath);
     const dbTables = (await adapter.listTables(connection)).map((t) => t.name);
 
     const diff = fileTables.map((t) => ({
@@ -37,7 +67,9 @@ router.post('/inspect', upload.single('file'), async (req, res) => {
     }));
 
     res.json({
-      uploadId: path.basename(req.file.path),
+      // uploadId 指向「解密後」的檔（如果有加密過）— step 2 直接吃
+      uploadId: path.basename(workPath),
+      encryptedInput: wasEncrypted,
       fileTables,
       dbTables,
       diff,

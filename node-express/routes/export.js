@@ -4,6 +4,7 @@ const fs = require('fs');
 const archiver = require('archiver');
 const { getAdapter } = require('../adapters');
 const jobs = require('../lib/jobs');
+const dumpCrypto = require('../lib/dump-crypto');
 
 const TMP_DIR = path.join(__dirname, '..', 'tmp');
 
@@ -34,6 +35,24 @@ router.post('/', async (req, res) => {
   try { adapter = getAdapter(type); }
   catch (e) { return res.status(400).json({ error: e.message }); }
 
+  // 加密選項：options.encrypt:true 觸發；password 一律走 env (避免落 request body)
+  // env var 名預設 DBMIGRATOR_DUMP_PASSWORD，可被 options.passwordEnv override
+  let dumpPassword = null;
+  if (options.encrypt) {
+    try {
+      dumpPassword = dumpCrypto.resolvePassword({
+        passwordEnv: options.passwordEnv || 'DBMIGRATOR_DUMP_PASSWORD',
+      });
+    } catch (e) {
+      return res.status(400).json({ error: `encryption requested: ${e.message}` });
+    }
+    if (!dumpPassword) {
+      return res.status(400).json({
+        error: 'encryption requested but no password — set DBMIGRATOR_DUMP_PASSWORD env',
+      });
+    }
+  }
+
   const job = jobs.create('export');
   const jobDir = path.join(TMP_DIR, job.id);
   fs.mkdirSync(jobDir, { recursive: true });
@@ -53,6 +72,14 @@ router.post('/', async (req, res) => {
           : { ...connection, database: db };
         const outFile = path.join(filesDir, `${safeName(db)}.sql`);
         await adapter.dump(perDbConn, options, outFile, (line) => jobs.append(job.id, line));
+
+        // 寫完之後 (in-place) 加密成 .enc，原檔砍掉避免 plaintext 留在 tmp
+        if (dumpPassword) {
+          const encFile = outFile + '.enc';
+          dumpCrypto.encryptFile(outFile, encFile, dumpPassword);
+          fs.unlinkSync(outFile);
+          jobs.append(job.id, `Encrypted → ${path.basename(encFile)}`);
+        }
       }
 
       let downloadUrl;
@@ -65,7 +92,9 @@ router.post('/', async (req, res) => {
         downloadUrl = `/api/export/${job.id}/zip`;
       }
 
-      jobs.setStatus(job.id, 'done', { result: { downloadUrl, count: databases.length } });
+      jobs.setStatus(job.id, 'done', {
+        result: { downloadUrl, count: databases.length, encrypted: !!dumpPassword },
+      });
     } catch (e) {
       console.error('[export] failed:', e);
       jobs.setStatus(job.id, 'error', { error: e.message || String(e) });
@@ -78,9 +107,12 @@ router.get('/:id/file', (req, res) => {
   if (!job || job.status !== 'done') return res.status(404).json({ error: 'Not ready' });
   const filesDir = path.join(TMP_DIR, req.params.id, 'sql');
   const files = fs.existsSync(filesDir) ? fs.readdirSync(filesDir) : [];
+  // 加密過會是 .sql.enc；優先給 .enc，沒才回 .sql
+  const enc = files.find((f) => f.endsWith('.sql.enc'));
   const sql = files.find((f) => f.endsWith('.sql'));
-  if (!sql) return res.status(404).json({ error: 'File missing' });
-  res.download(path.join(filesDir, sql));
+  const pick = enc || sql;
+  if (!pick) return res.status(404).json({ error: 'File missing' });
+  res.download(path.join(filesDir, pick));
 });
 
 router.get('/:id/zip', (req, res) => {

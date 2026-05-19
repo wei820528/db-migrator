@@ -169,9 +169,11 @@
             "options": {
               "type": "object",
               "properties": {
-                "tables":   { "type": "array", "items": { "type": "string" } },
-                "noData":   { "type": "boolean" },
-                "noSchema": { "type": "boolean" }
+                "tables":      { "type": "array", "items": { "type": "string" } },
+                "noData":      { "type": "boolean" },
+                "noSchema":    { "type": "boolean" },
+                "encrypt":     { "type": "boolean", "description": "AES-256-GCM encrypt the dump. Password 走 env (DBMIGRATOR_DUMP_PASSWORD by default)" },
+                "passwordEnv": { "type": "string",  "description": "Override env var name for dump password (default: DBMIGRATOR_DUMP_PASSWORD)" }
               }
             }
           }
@@ -191,15 +193,18 @@
     },
     "/api/import/inspect": {
       "post": {
-        "tags": ["Import"], "summary": "上傳 SQL 檔 → 回 table 對照（檔內 vs 目標 DB 已存在）",
+        "tags": ["Import"], "summary": "上傳 SQL 檔 → 回 table 對照（檔內 vs 目標 DB 已存在）。自動偵測 DBMENC 加密檔頭。",
         "requestBody": { "required": true, "content": { "multipart/form-data": { "schema": {
           "type": "object",
           "properties": {
             "file": { "type": "string", "format": "binary" },
-            "meta": { "type": "string", "description": "JSON: { type, connection }" }
+            "meta": { "type": "string", "description": "JSON: { type, connection, passwordEnv? }。passwordEnv 給 .enc 檔解密用，預設讀 DBMIGRATOR_DUMP_PASSWORD env" }
           }
         } } } },
-        "responses": { "200": { "description": "{ uploadId, fileTables, dbTables, diff }" } }
+        "responses": {
+          "200": { "description": "{ uploadId, fileTables, dbTables, diff, encryptedInput }" },
+          "400": { "description": "加密檔但 env 沒給 password / 解密失敗" }
+        }
       }
     },
     "/api/import/run": {
