@@ -111,6 +111,7 @@ test('both specs reference paths that match real routes (smoke)', () => {
   const spec = JSON.parse(fs.readFileSync(SPECS['node-express'], 'utf8'));
   const allowList = new Set([
     '/api/modules', '/api/plugins/ui', '/api/plugins/reload',  // 根 app.get 註冊的
+    '/metrics', '/healthz',                                     // v2 Theme E observability，根 app.get
   ]);
   for (const p of Object.keys(spec.paths)) {
     const ok = [...prefixes].some((prefix) => p === prefix || p.startsWith(prefix + '/')) || allowList.has(p);

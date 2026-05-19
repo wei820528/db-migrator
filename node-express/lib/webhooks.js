@@ -220,6 +220,13 @@ function recordDelivery(id, event, status, error) {
   d.prepare(`UPDATE webhooks SET last_at = CURRENT_TIMESTAMP, last_status = ?,
              last_event = ?, last_error = ? WHERE id = ?`)
     .run(status, event, error ? String(error).slice(0, MAX_RESPONSE_SAMPLE) : null, id);
+
+  // v2 Theme E: bucket by event + ok/fail
+  try {
+    require('./metrics').counter('dbmigrator_webhook_deliveries_total',
+      'Total webhook deliveries by event and outcome')
+      .inc({ event, status: (status >= 200 && status < 300) ? 'ok' : 'fail' });
+  } catch (e) { /* metrics not loaded — non-fatal */ }
 }
 
 // ============ 加解密 secret（用既有的 AES-256-GCM helpers） ============

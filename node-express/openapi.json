@@ -22,6 +22,7 @@
     { "name": "Marketplace", "description": "從 GitHub 一鍵裝 plugin" },
     { "name": "Cross-DB",    "description": "v2 Theme B — 跨 dialect 遷移預覽" },
     { "name": "Webhooks",    "description": "v2 Theme C Phase 4 — HMAC-signed event delivery（job.done / job.failed / schedule.*）" },
+    { "name": "Observability","description": "v2 Theme E Phase 1 — Prometheus /metrics + structured /healthz；無 license gate" },
     { "name": "Modules",     "description": "Adapter / route / plugin 健康狀態" }
   ],
   "components": {
@@ -389,6 +390,45 @@
         "responses": {
           "200": { "description": "{ ok, status, attempt } 或 { ok:false, error, attempts }" },
           "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": ["Observability"],
+        "summary": "Prometheus exposition format（text/plain）",
+        "description": "v2 Theme E Phase 1。預設 metrics：\n- `dbmigrator_jobs_total{kind,status}` (counter) — 累計 jobs 數\n- `dbmigrator_webhook_deliveries_total{event,status}` (counter)\n- `dbmigrator_plugin_status{plugin}` (gauge 0/1)\n- `dbmigrator_module_status{module}` (gauge 0/1)\n- `dbmigrator_uptime_seconds` (gauge)\n\n**不在 license gate 內** — 給 Prometheus scraper 用，license 過期不會影響 scrape。",
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition (text/plain; version=0.0.4)",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": { "description": "metrics module error" }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": ["Observability"],
+        "summary": "Component-based health check（替代舊的 /api/health）",
+        "description": "v2 Theme E Phase 1。回 200 全健康、503 任一 component 失敗（給 k8s liveness probe / LB / Uptime monitor 用）。**不在 license gate 內**。\n\n檢查的 components：\n- `jobs_db` / `schedules_db` / `webhooks_db` — SQLite 檔存在性 + size + mtime\n- `adapters` — adapter registry 狀態，列出 failed 的名字\n- `license` — license gate 狀態（disabled / licensed / trial / free 算健康）",
+        "responses": {
+          "200": {
+            "description": "All components healthy",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "properties": {
+                "ok": { "type": "boolean" },
+                "uptime": { "type": "number" },
+                "version": { "type": "string" },
+                "components": { "type": "object", "additionalProperties": {
+                  "type": "object",
+                  "properties": { "ok": { "type": "boolean" } }
+                } }
+              }
+            } } }
+          },
+          "503": { "description": "One or more components unhealthy（same shape as 200，ok: false）" }
         }
       }
     },

@@ -18,6 +18,19 @@ app.get('/openapi.json', (req, res) => {
   res.sendFile(path.join(__dirname, 'openapi.json'));
 });
 
+// v2 Theme E: observability — Prometheus /metrics + structured /healthz。
+// 都不在 license gate 內（給 scraper / k8s liveness probe / uptime monitor）。
+app.get('/metrics', (req, res) => {
+  try {
+    const metrics = require('./lib/metrics');
+    metrics.gauge('dbmigrator_uptime_seconds', 'Process uptime in seconds').set(process.uptime());
+    res.type('text/plain; version=0.0.4').send(metrics.render());
+  } catch (e) {
+    res.status(500).type('text/plain').send('# metrics error: ' + e.message + '\n');
+  }
+});
+app.get('/healthz', require('./lib/healthz').handler());
+
 // License gate — applied to /api/* (except /api/license/* and /api/modules)
 const license = require('./lib/license');
 app.use(license.gate());
@@ -61,6 +74,25 @@ try { require('./routes/schedule').startLoop?.(); } catch (e) { console.warn('[s
 const pluginHost = new PluginHost(app, path.join(__dirname, 'plugins'));
 pluginHost.scan();
 if (process.env.PLUGIN_WATCH !== 'off') pluginHost.watch();
+
+// v2 Theme E: 把 plugin / module status 反映到 metrics gauge（給 Prometheus alert）
+try {
+  const m = require('./lib/metrics');
+  const refreshPluginGauges = () => {
+    const g = m.gauge('dbmigrator_plugin_status', 'Plugin status: 1=ok, 0=failed');
+    g.values.clear();
+    for (const [name, st] of Object.entries(pluginHost.getStatus())) {
+      g.set({ plugin: name }, st.ok ? 1 : 0);
+    }
+    const mg = m.gauge('dbmigrator_module_status', 'Built-in route module status: 1=ok, 0=failed');
+    mg.values.clear();
+    for (const [name, st] of Object.entries(moduleStatus)) {
+      mg.set({ module: name }, st.ok ? 1 : 0);
+    }
+  };
+  refreshPluginGauges();
+  setInterval(refreshPluginGauges, 30_000).unref();   // 每 30s 重新整理
+} catch (e) { /* metrics 沒裝 — 不影響功能 */ }
 
 // Module / plugin status — UI uses this to disable unavailable cards & tabs.
 app.get('/api/modules', (req, res) => {
