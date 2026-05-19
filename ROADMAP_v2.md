@@ -72,14 +72,16 @@ v1 系列已收尾（7 adapter / plugin marketplace / online license / remote ki
 |---|---|---|
 | 1 | Capability manifest（11 種 permission）+ marketplace UI 知情同意 + signer 驗 + `.granted-permissions.json` | ✓ done — 18 tests |
 | 2 | worker_thread 隔離 + SDK ctx + route MVP（崩潰隔離、event loop 隔離） | ✓ done — 14 tests |
-| 3 | Per-permission runtime enforcement（攔 `require('fs')` / network / DB calls） | pending |
-| 4 | Audit log（每次敏感 API call 進 event log） | pending |
+| 3 | Require gate — plugin 自家 require() 按 permission 過濾 Node builtins | ✓ done — 16 tests |
+| 4 | Audit log（每次敏感 API call 進 event log）+ wrap `new Worker()` 防 nested escape | pending |
 | 5 | Migration / compat（legacy plugin 自動 grandfather 成 `unrestricted`） | partial — 偵測在 Phase 1，warn flag legacy=true |
 
 **主要受眾**：開放 plugin marketplace 給第三方時的安全護欄。
 **最大風險**：Node 沒有真正的 sandbox（vm2 deprecated, isolated-vm 難用），worker thread 也只是 process 內隔離。要做就是大工程。
 
-**狀態**：Phase 1+2 done — manifest `sandboxed: true` 的 plugin 跑在 worker_thread，handler 崩潰 / process.exit 都不會 take down main thread；唯一對外 API 是傳入的 ctx 物件（route + log）。但 worker 內仍能 `require('fs')` —真正 OS-level sandbox 留 Phase 3+。Sample 在 [plugins/sandboxed-hello/](node-express/plugins/sandboxed-hello/)。
+**狀態**：Phase 1+2+3 done — manifest `sandboxed: true` 的 plugin 跑在 worker_thread，handler 崩潰 / process.exit 都不會 take down main thread；plugin 自家 require() 被 gate 攔，沒拿 `fs:*` 不能 require fs、沒 `network` 不能 require http、沒 `unrestricted` 不能 require child_process。Denial 進 audit log。
+**仍未擋（要 OS-level sandbox 才行）**：`process.dlopen` / `process.binding` native escape、`Atomics + SharedArrayBuffer` 跨 thread、plugin 用 `new Worker(code, {eval:true})` spawn 沒 gate 的子 worker。Phase 4 可考慮 wrap Worker 構造子。
+Sample [plugins/sandboxed-hello/](node-express/plugins/sandboxed-hello/) 含 `/try-fs` demo 看 gate 動作。
 
 ---
 
