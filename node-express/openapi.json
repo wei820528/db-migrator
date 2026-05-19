@@ -173,7 +173,19 @@
                 "noData":      { "type": "boolean" },
                 "noSchema":    { "type": "boolean" },
                 "encrypt":     { "type": "boolean", "description": "AES-256-GCM encrypt the dump. Password 走 env (DBMIGRATOR_DUMP_PASSWORD by default)" },
-                "passwordEnv": { "type": "string",  "description": "Override env var name for dump password (default: DBMIGRATOR_DUMP_PASSWORD)" }
+                "passwordEnv": { "type": "string",  "description": "Override env var name for dump password (default: DBMIGRATOR_DUMP_PASSWORD)" },
+                "s3": {
+                  "type": "object",
+                  "description": "Upload to S3 after dump (+optional encrypt). AWS creds 走 SDK standard chain。env fallback: S3_BUCKET / S3_PREFIX / S3_REGION / AWS_REGION",
+                  "properties": {
+                    "bucket":       { "type": "string", "description": "S3 bucket name (必填才會啟動上傳)" },
+                    "prefix":       { "type": "string", "description": "Key prefix (default empty)" },
+                    "region":       { "type": "string" },
+                    "endpoint":     { "type": "string", "description": "Custom S3 endpoint (MinIO / R2)" },
+                    "deleteLocal":  { "type": "boolean", "description": "上傳完後砍掉本機檔（純 S3 archive 模式）。預設 false — 保留本機讓 /file 下載仍 work" },
+                    "keyPattern":   { "type": "string", "description": "Tokens: {prefix} {dbName} {ts} {ext} {basename}。預設 \"{prefix}{dbName}-{ts}{ext}\"" }
+                  }
+                }
               }
             }
           }

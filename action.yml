@@ -87,6 +87,24 @@ inputs:
     description: '(export / import / dump-neutral / restore-neutral) **Pass via secrets!** Dump file password — separate from DB password'
     required: false
 
+  # ── S3 cloud destination (Theme A Phase 2) ──
+  s3-bucket:
+    description: '(export / dump-neutral) Upload dump to s3://bucket/...； AWS creds 走 standard chain'
+    required: false
+  s3-prefix:
+    description: 'S3 key prefix (default empty)'
+    required: false
+  s3-region:
+    description: 'AWS region (default AWS_REGION env)'
+    required: false
+  s3-endpoint:
+    description: 'Custom S3 endpoint (MinIO / Cloudflare R2)'
+    required: false
+  s3-delete-local:
+    description: '砍掉本機檔（純 S3 archive 模式）'
+    required: false
+    default: 'false'
+
   # ── Cross-DB preview ──
   source-type:
     description: '(preview-crossdb) Source DB type'

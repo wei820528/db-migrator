@@ -34,18 +34,23 @@ const CONN_FLAGS = [
 ];
 
 const PER_CMD_FLAGS = [
-  ['--out',       'out'],
-  ['--file',      'file'],
-  ['--tables',    'tables'],
+  ['--out',         'out'],
+  ['--file',        'file'],
+  ['--tables',      'tables'],
+  ['--s3-bucket',   's3-bucket'],
+  ['--s3-prefix',   's3-prefix'],
+  ['--s3-region',   's3-region'],
+  ['--s3-endpoint', 's3-endpoint'],
 ];
 
 const BOOL_FLAGS = [
-  ['--ssl',       'ssl'],
-  ['--no-data',   'no-data'],
-  ['--no-schema', 'no-schema'],
-  ['--json',      'json'],
-  ['--quiet',     'quiet'],
-  ['--encrypt',   'encrypt'],
+  ['--ssl',              'ssl'],
+  ['--no-data',          'no-data'],
+  ['--no-schema',        'no-schema'],
+  ['--json',             'json'],
+  ['--quiet',            'quiet'],
+  ['--encrypt',          'encrypt'],
+  ['--s3-delete-local',  's3-delete-local'],
 ];
 
 // preview-crossdb 是特例 — 用一組 source-* flag

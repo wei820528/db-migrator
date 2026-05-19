@@ -5,6 +5,7 @@ const archiver = require('archiver');
 const { getAdapter } = require('../adapters');
 const jobs = require('../lib/jobs');
 const dumpCrypto = require('../lib/dump-crypto');
+const destS3 = require('../lib/dest-s3');
 
 const TMP_DIR = path.join(__dirname, '..', 'tmp');
 
@@ -53,6 +54,10 @@ router.post('/', async (req, res) => {
     }
   }
 
+  // S3 cloud destination — options.s3 = { bucket, prefix?, region?, deleteLocal? }
+  // env fallback: S3_BUCKET / S3_PREFIX / S3_REGION / AWS_REGION
+  const s3Config = destS3.resolveS3Config(options, process.env);
+
   const job = jobs.create('export');
   const jobDir = path.join(TMP_DIR, job.id);
   fs.mkdirSync(jobDir, { recursive: true });
@@ -65,6 +70,8 @@ router.post('/', async (req, res) => {
       const filesDir = path.join(jobDir, 'sql');
       fs.mkdirSync(filesDir, { recursive: true });
 
+      const s3Uploaded = [];
+
       for (const db of databases) {
         jobs.append(job.id, `=== ${db} ===`);
         const perDbConn = type === 'sqlite'
@@ -74,16 +81,37 @@ router.post('/', async (req, res) => {
         await adapter.dump(perDbConn, options, outFile, (line) => jobs.append(job.id, line));
 
         // 寫完之後 (in-place) 加密成 .enc，原檔砍掉避免 plaintext 留在 tmp
+        let finalFile = outFile;
         if (dumpPassword) {
           const encFile = outFile + '.enc';
           dumpCrypto.encryptFile(outFile, encFile, dumpPassword);
           fs.unlinkSync(outFile);
+          finalFile = encFile;
           jobs.append(job.id, `Encrypted → ${path.basename(encFile)}`);
+        }
+
+        // 推 S3 (如果有 config)。注意：encryption 先，upload 後 — encrypt-at-rest
+        if (s3Config) {
+          const key = destS3.buildObjectKey({
+            keyPattern: s3Config.keyPattern,
+            prefix: s3Config.prefix,
+            dbName: safeName(db),
+            srcPath: finalFile,
+          });
+          const r = await destS3.uploadFile(finalFile, {
+            ...s3Config, key, log: (m) => jobs.append(job.id, m),
+          });
+          s3Uploaded.push(r);
+          if (s3Config.deleteLocal) {
+            try { fs.unlinkSync(finalFile); } catch {}
+          }
         }
       }
 
       let downloadUrl;
-      if (databases.length === 1) {
+      if (s3Config && s3Config.deleteLocal) {
+        downloadUrl = null;   // 沒留本機檔，下載 URL 不適用
+      } else if (databases.length === 1) {
         downloadUrl = `/api/export/${job.id}/file`;
       } else {
         const zipPath = path.join(jobDir, 'dumps.zip');
@@ -93,7 +121,12 @@ router.post('/', async (req, res) => {
       }
 
       jobs.setStatus(job.id, 'done', {
-        result: { downloadUrl, count: databases.length, encrypted: !!dumpPassword },
+        result: {
+          downloadUrl,
+          count: databases.length,
+          encrypted: !!dumpPassword,
+          s3: s3Uploaded.length > 0 ? s3Uploaded : undefined,
+        },
       });
     } catch (e) {
       console.error('[export] failed:', e);

@@ -199,6 +199,7 @@ test('action.yml declares all the inputs the entry script reads', () => {
     'source-type', 'source-host', 'source-port', 'source-user', 'source-password',
     'source-database', 'target-type', 'json', 'quiet', 'config',
     'encrypt', 'dump-password',
+    's3-bucket', 's3-prefix', 's3-region', 's3-endpoint', 's3-delete-local',
   ]) {
     assert.ok(new RegExp(`^\\s*${name}:`, 'm').test(actionYml),
       `action.yml is missing input declaration for "${name}"`);
@@ -242,5 +243,60 @@ test('buildArgs: dump-password works on restore-neutral too', () => {
     const i = args.indexOf('--password-env');
     assert.ok(i >= 0);
     assert.strictEqual(args[i + 1], 'DBMIGRATOR_GHA_DUMP_PASSWORD');
+  });
+});
+
+// ============ Theme A Phase 2 — S3 cloud destination flags ============
+
+test('buildArgs: s3-bucket / s3-prefix / s3-region threaded as --s3-* flags', () => {
+  withInputs({
+    command: 'export', type: 'mysql', host: 'h', out: 'x.sql',
+    's3-bucket': 'my-backups', 's3-prefix': 'prod/', 's3-region': 'ap-northeast-1',
+  }, (gha) => {
+    const args = gha.buildArgs();
+    const b = args.indexOf('--s3-bucket');
+    assert.ok(b >= 0); assert.strictEqual(args[b + 1], 'my-backups');
+    const p = args.indexOf('--s3-prefix');
+    assert.ok(p >= 0); assert.strictEqual(args[p + 1], 'prod/');
+    const r = args.indexOf('--s3-region');
+    assert.ok(r >= 0); assert.strictEqual(args[r + 1], 'ap-northeast-1');
+  });
+});
+
+test('buildArgs: s3-endpoint (MinIO/R2)', () => {
+  withInputs({
+    command: 'export', type: 'mysql', host: 'h', out: 'x.sql',
+    's3-bucket': 'b', 's3-endpoint': 'https://minio.local:9000',
+  }, (gha) => {
+    const args = gha.buildArgs();
+    const i = args.indexOf('--s3-endpoint');
+    assert.ok(i >= 0);
+    assert.strictEqual(args[i + 1], 'https://minio.local:9000');
+  });
+});
+
+test('buildArgs: s3-delete-local 是 boolean flag', () => {
+  withInputs({
+    command: 'export', type: 'mysql', host: 'h', out: 'x.sql',
+    's3-bucket': 'b', 's3-delete-local': 'true',
+  }, (gha) => {
+    assert.ok(gha.buildArgs().includes('--s3-delete-local'));
+  });
+  withInputs({
+    command: 'export', type: 'mysql', host: 'h', out: 'x.sql',
+    's3-bucket': 'b', 's3-delete-local': 'false',
+  }, (gha) => {
+    assert.ok(!gha.buildArgs().includes('--s3-delete-local'));
+  });
+});
+
+test('buildArgs: s3 flags only emit when input set (no spurious empty flags)', () => {
+  withInputs({
+    command: 'export', type: 'mysql', host: 'h', out: 'x.sql',
+  }, (gha) => {
+    const args = gha.buildArgs();
+    assert.ok(!args.includes('--s3-bucket'));
+    assert.ok(!args.includes('--s3-prefix'));
+    assert.ok(!args.includes('--s3-region'));
   });
 });
