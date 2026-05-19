@@ -18,7 +18,8 @@
     { "name": "2FA",        "description": "TOTP setup / enable / disable / verify-login" },
     { "name": "Billing",    "description": "Stripe / 綠界 (ECPay) checkout" },
     { "name": "Revocation", "description": "Offline-license remote kill switch（公開無 auth）" },
-    { "name": "Admin",      "description": "Admin web UI（cookie-auth）" }
+    { "name": "Admin",      "description": "Admin web UI（cookie-auth）" },
+    { "name": "Observability", "description": "Prometheus /metrics + structured /healthz（公開無 auth；給 scraper / liveness probe）" }
   ],
   "components": {
     "securitySchemes": {
@@ -97,6 +98,48 @@
       "get": {
         "tags": ["Auth"], "summary": "Health check",
         "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": ["Observability"],
+        "summary": "Prometheus exposition format metrics（無 auth）",
+        "description": "公開供 Prometheus scraper 拉取。Counter: licenseserver_events_total{event}。Gauge: licenseserver_users_total{plan}、licenseserver_sessions_active、licenseserver_api_tokens_total{state}、licenseserver_issued_licenses_total{state}、licenseserver_uptime_seconds。",
+        "responses": {
+          "200": {
+            "description": "text/plain 格式的 metric 樣本",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": ["Observability"],
+        "summary": "結構化健康檢查（公開無 auth；給 k8s liveness / uptime monitor）",
+        "description": "回傳 ok / uptime / components。Components 分 critical（license_db）跟 informational（smtp_config / stripe_config / ecpay_config）。只有 critical 失敗才會讓 overall ok=false 並回 503。",
+        "responses": {
+          "200": {
+            "description": "所有 critical components 正常",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "properties": {
+                "ok":         { "type": "boolean" },
+                "uptime":     { "type": "number", "description": "process uptime 秒數" },
+                "components": { "type": "object", "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "ok":       { "type": "boolean" },
+                    "critical": { "type": "boolean" },
+                    "error":    { "type": "string", "nullable": true }
+                  }
+                } }
+              }
+            } } }
+          },
+          "503": { "description": "有 critical component 失敗" }
+        }
       }
     },
     "/api/auth/register": {

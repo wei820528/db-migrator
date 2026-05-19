@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "admin": "node admin-cli.js",
-    "test": "node --test test/ip.test.js test/plans.test.js test/schedules.test.js test/ecpay.test.js test/totp.test.js test/revocation.test.js test/tokens.test.js"
+    "test": "node --test test/ip.test.js test/plans.test.js test/schedules.test.js test/ecpay.test.js test/totp.test.js test/revocation.test.js test/tokens.test.js test/observability.test.js"
   },
   "engines": { "node": ">=18" },
   "dependencies": {

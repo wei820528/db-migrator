@@ -49,6 +49,12 @@ function logEvent(userId, ipAddr, ua, event, details) {
   db.prepare('INSERT INTO event_log (user_id, ip, user_agent, event, details) VALUES (?,?,?,?,?)').run(
     userId || null, ipAddr || '', ua || '', event, details ? JSON.stringify(details) : null
   );
+  // v2 Theme E Phase 2: bucket events by name for Prometheus
+  try {
+    require('./lib/metrics').counter('licenseserver_events_total',
+      'License server events by name (login / kicked / register / etc.)')
+      .inc({ event });
+  } catch { /* metrics not loaded — non-fatal */ }
 }
 function ipOf(req) {
   return (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || req.ip || '';
@@ -281,9 +287,61 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 // =================================================================
-// Health + admin routes
+// Health + observability + admin routes
 // =================================================================
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+
+// v2 Theme E Phase 2: Prometheus metrics + structured healthz (component-based)
+app.get('/metrics', (req, res) => {
+  try {
+    const metrics = require('./lib/metrics');
+    // 即時 refresh users / sessions / api_tokens / revoked-license gauges
+    refreshLicenseServerGauges(metrics);
+    res.type('text/plain; version=0.0.4').send(metrics.render());
+  } catch (e) {
+    res.status(500).type('text/plain').send('# metrics error: ' + e.message + '\n');
+  }
+});
+app.get('/healthz', require('./lib/healthz').handler());
+
+function refreshLicenseServerGauges(m) {
+  m.gauge('licenseserver_uptime_seconds', 'Process uptime in seconds').set(process.uptime());
+
+  // Users by plan
+  const planG = m.gauge('licenseserver_users_total', 'Number of users by plan');
+  planG.values.clear();
+  for (const row of db.prepare('SELECT plan, COUNT(*) AS n FROM users GROUP BY plan').all()) {
+    planG.set({ plan: row.plan }, row.n);
+  }
+  // Active sessions (online clients)
+  const sesN = db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n;
+  m.gauge('licenseserver_sessions_active', 'Currently active client sessions').set(sesN);
+
+  // API tokens by state
+  const tokG = m.gauge('licenseserver_api_tokens_total', 'API tokens by state (active / revoked / expired)');
+  tokG.values.clear();
+  try {
+    for (const row of db.prepare(`SELECT
+        CASE
+          WHEN revoked_at IS NOT NULL THEN 'revoked'
+          WHEN expires_at IS NOT NULL AND expires_at < datetime('now') THEN 'expired'
+          ELSE 'active'
+        END AS state,
+        COUNT(*) AS n
+      FROM api_tokens GROUP BY state`).all()) {
+      tokG.set({ state: row.state }, row.n);
+    }
+  } catch { /* api_tokens table might not exist on fresh DB before first run */ }
+
+  // Issued offline licenses (kill switch table)
+  try {
+    const revoked = db.prepare(`SELECT COUNT(*) AS n FROM issued_licenses WHERE revoked_at IS NOT NULL`).get().n;
+    const active  = db.prepare(`SELECT COUNT(*) AS n FROM issued_licenses WHERE revoked_at IS NULL`).get().n;
+    const licG = m.gauge('licenseserver_issued_licenses_total', 'Offline licenses tracked for remote revocation');
+    licG.set({ state: 'active' }, active);
+    licG.set({ state: 'revoked' }, revoked);
+  } catch { /* issued_licenses table missing */ }
+}
 
 app.use('/api/admin', require('./routes/admin')({ logEvent, ipOf, checkUserStatus }));
 app.use('/api/user',  require('./routes/user'));
