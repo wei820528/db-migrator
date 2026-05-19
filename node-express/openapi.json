@@ -271,7 +271,9 @@
             "type":       { "$ref": "#/components/schemas/DbType" },
             "connection": { "$ref": "#/components/schemas/ConnectionInfo" },
             "databases":  { "type": "array", "items": { "type": "string" } },
-            "active":     { "type": "boolean", "default": true }
+            "active":     { "type": "boolean", "default": true },
+            "retentionCount": { "type": "integer", "description": "保留最新 N 份歷史，0=不限。跟 retentionDays 是聯集（任一條 trigger 就砍）" },
+            "retentionDays":  { "type": "integer", "description": "保留最近 N 天歷史，0=不限" }
           }
         } } } },
         "responses": { "200": { "description": "OK" } }
@@ -294,6 +296,51 @@
         "tags": ["Schedule"], "summary": "立刻跑一次",
         "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
         "responses": { "200": { "description": "{ jobId }" } }
+      }
+    },
+    "/api/schedule/{id}/history": {
+      "get": {
+        "tags": ["Schedule"], "summary": "列該 schedule 的所有歷史備份檔（time-travel 用）",
+        "description": "Phase 4 — 每個 schedule 的輸出放在 scheduled-backups/{sched-id}/，這個 endpoint 列該目錄裡所有檔，DESC by mtime。",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "{ scheduleId, scheduleName, retention, items: [{ name, sizeBytes, mtime, encrypted }] }" } }
+      }
+    },
+    "/api/schedule/{id}/restore": {
+      "post": {
+        "tags": ["Schedule"], "summary": "從歷史檔還原 — time-travel restore",
+        "description": "選擇 schedule 的某份歷史 dump，restore 到原 connection 或指定 target。.enc 檔自動 streaming decrypt（需 DBMIGRATOR_DUMP_PASSWORD env）。",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["historyName"],
+          "properties": {
+            "historyName": { "type": "string", "description": "從 /api/schedule/{id}/history 拿到的 name" },
+            "target": {
+              "type": "object",
+              "description": "Override target — 沒給就用原 schedule 的 connection + 第一個 database",
+              "properties": {
+                "type":       { "$ref": "#/components/schemas/DbType" },
+                "connection": { "$ref": "#/components/schemas/ConnectionInfo" },
+                "database":   { "type": "string" }
+              }
+            },
+            "passwordEnv": { "type": "string", "description": "override env var name for decrypt (default DBMIGRATOR_DUMP_PASSWORD)" }
+          }
+        } } } },
+        "responses": {
+          "200": { "description": "{ jobId } — async；poll /api/jobs/{id}" },
+          "400": { "description": "history file not found / path traversal blocked / encrypted but no password" }
+        }
+      }
+    },
+    "/api/schedule/{id}/history/{name}": {
+      "delete": {
+        "tags": ["Schedule"], "summary": "刪除單一歷史備份檔",
+        "parameters": [
+          { "name": "id",   "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "name", "in": "path", "required": true, "schema": { "type": "string" }, "description": "history file name (不可含 / .. \\)" }
+        ],
+        "responses": { "200": { "description": "{ ok: true }" }, "400": { "description": "bad name / not found" } }
       }
     },
     "/api/marketplace/preview": {

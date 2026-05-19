@@ -39,6 +39,18 @@ CREATE TABLE IF NOT EXISTS schedules (
 CREATE INDEX IF NOT EXISTS idx_schedules_next ON schedules(active, next_run_at);
 `);
 
+// Theme A Phase 4 — retention 欄位（time-travel / 歷史保留）
+// 為什麼 ALTER 不重新 CREATE：在 v1.3.x 已經 ship 過 schedules.db，現有客戶
+// 升級要保留資料。SQLite 沒「ADD COLUMN IF NOT EXISTS」所以 try-catch。
+function safeAddColumn(name, ddl) {
+  try { db.exec(`ALTER TABLE schedules ADD COLUMN ${name} ${ddl}`); }
+  catch (e) {
+    if (!/duplicate column/i.test(String(e.message))) throw e;
+  }
+}
+safeAddColumn('retention_count', 'INTEGER NOT NULL DEFAULT 0');   // 0 = 不限
+safeAddColumn('retention_days',  'INTEGER NOT NULL DEFAULT 0');   // 0 = 不限
+
 // ============================================================
 // Schedule expression parsing
 // ============================================================
@@ -85,6 +97,8 @@ function rowToSchedule(row) {
     databases: JSON.parse(row.databases_json),
     expression: row.expression,
     active: !!row.active,
+    retentionCount: row.retention_count || 0,
+    retentionDays:  row.retention_days  || 0,
     nextRunAt: row.next_run_at,
     lastRunAt: row.last_run_at,
     lastStatus: row.last_status,
@@ -103,7 +117,7 @@ function get(id) {
   return rowToSchedule(db.prepare('SELECT * FROM schedules WHERE id = ?').get(id));
 }
 
-function create({ name, type, connection, databases, expression, active = true }) {
+function create({ name, type, connection, databases, expression, active = true, retentionCount = 0, retentionDays = 0 }) {
   if (!name || !type || !connection || !databases || !expression) {
     throw new Error('name, type, connection, databases, expression required');
   }
@@ -113,11 +127,14 @@ function create({ name, type, connection, databases, expression, active = true }
   const { password, ...connRest } = connection;
   const enc = password ? encrypt(password) : null;
   db.prepare(`INSERT INTO schedules
-    (id, name, type, conn_json, conn_pwd_enc, databases_json, expression, active, next_run_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    (id, name, type, conn_json, conn_pwd_enc, databases_json, expression, active,
+     retention_count, retention_days, next_run_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       id, name, type,
       JSON.stringify(connRest), enc,
       JSON.stringify(databases), expression, active ? 1 : 0,
+      Math.max(0, Number(retentionCount) | 0),
+      Math.max(0, Number(retentionDays) | 0),
       nextRunAfter(now, expression), now, now
     );
   return get(id);
@@ -138,6 +155,12 @@ function update(id, patch) {
     fields.push('next_run_at = ?'); values.push(nextRunAfter(Date.now(), patch.expression));
   }
   if (patch.active !== undefined)     { fields.push('active = ?');     values.push(patch.active ? 1 : 0); }
+  if (patch.retentionCount !== undefined) {
+    fields.push('retention_count = ?'); values.push(Math.max(0, Number(patch.retentionCount) | 0));
+  }
+  if (patch.retentionDays !== undefined) {
+    fields.push('retention_days = ?');  values.push(Math.max(0, Number(patch.retentionDays) | 0));
+  }
   if (patch.connection !== undefined) {
     const { password, ...rest } = patch.connection;
     fields.push('conn_json = ?'); values.push(JSON.stringify(rest));
