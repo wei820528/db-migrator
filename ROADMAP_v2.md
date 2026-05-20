@@ -10,17 +10,19 @@ v1 系列已收尾（7 adapter / plugin marketplace / online license / remote ki
 
 針對「我的生產 DB 100GB+」「我要 30 天備份歷史」「我要備份到 S3」這類需求。
 
-| 子項 | 為什麼 | 工作量 |
+| Phase | 子項 | 狀態 |
 |---|---|---|
-| Streaming / chunked dump | 目前是單檔；100GB+ 會吃完 disk + RAM。改 multi-file chunk + 並行 worker | 中 |
-| Resumable dump/restore | 中斷後續傳（checkpoint 寫入 dump file header） | 中 |
-| Incremental backup | 基準 dump + 後續 delta（row hash 或 timestamp 比對） | 大 |
-| Cloud destination | S3 / GCS / Azure Blob 當 scheduled backup 目的地 | 小 |
-| Dump 加密 | AES-256-GCM 加密 dump 檔；password 或 key file | 小 |
-| 歷史保留 + time-travel | UI 上選日期還原 (`schedule` 留 30 個版本) | 中 |
+| 1 | Dump 加密（AES-256-GCM + scrypt KDF） | ✓ done — 24 tests |
+| 2 | Cloud destination（S3 / MinIO / R2，optional @aws-sdk/client-s3） | ✓ done — 23 tests |
+| 3 | Streaming encrypt + multipart S3 upload（lib-storage @ 100MB+） | ✓ done — 14 tests (10 streaming + 4 multipart) |
+| 4 | 歷史保留 + time-travel restore（per-schedule subdir + retentionCount/Days） | ✓ done — 17 tests |
+| 5 | Resumable dump/restore（中斷後續傳 — checkpoint 寫入 dump header） | pending |
+| 6 | Incremental backup（基準 dump + delta — row hash / timestamp 比對） | pending |
 
 **主要受眾**：實際把 DB Migrator 跑在 production 的客戶。
-**最大風險**：incremental backup 邏輯複雜，5 個 adapter 都要對；可能要先做 streaming 再考慮 incremental。
+**最大風險**：incremental backup 邏輯複雜，5 個 adapter 都要對。
+
+**狀態**：✓ **Phase 1-4 完成**（v1.4.0 ship）— encrypt-at-rest dump + S3 multipart streaming 上線；scheduled backup per-schedule history + retention + time-travel restore 就緒。整條 dump → encrypt → upload 沒 in-memory buffer（RAM O(1)）。Phase 5/6 留給 v1.5/v2.0 — 一般使用者用不到。
 
 ---
 
@@ -73,14 +75,14 @@ v1 系列已收尾（7 adapter / plugin marketplace / online license / remote ki
 | 1 | Capability manifest（11 種 permission）+ marketplace UI 知情同意 + signer 驗 + `.granted-permissions.json` | ✓ done — 18 tests |
 | 2 | worker_thread 隔離 + SDK ctx + route MVP（崩潰隔離、event loop 隔離） | ✓ done — 14 tests |
 | 3 | Require gate — plugin 自家 require() 按 permission 過濾 Node builtins | ✓ done — 16 tests |
-| 4 | Audit log（每次敏感 API call 進 event log）+ wrap `new Worker()` 防 nested escape | pending |
-| 5 | Migration / compat（legacy plugin 自動 grandfather 成 `unrestricted`） | partial — 偵測在 Phase 1，warn flag legacy=true |
+| 4 | Persistent audit log (SQLite) + wrap `new Worker()` 防 nested escape | ✓ done — 14 tests (12 SQLite + 2 worker gate) |
+| 5 | Migration / compat（legacy plugin 自動 grandfather 成 `unrestricted`） | ✓ partial — 偵測在 Phase 1，warn flag legacy=true |
 
 **主要受眾**：開放 plugin marketplace 給第三方時的安全護欄。
 **最大風險**：Node 沒有真正的 sandbox（vm2 deprecated, isolated-vm 難用），worker thread 也只是 process 內隔離。要做就是大工程。
 
-**狀態**：Phase 1+2+3 done — manifest `sandboxed: true` 的 plugin 跑在 worker_thread，handler 崩潰 / process.exit 都不會 take down main thread；plugin 自家 require() 被 gate 攔，沒拿 `fs:*` 不能 require fs、沒 `network` 不能 require http、沒 `unrestricted` 不能 require child_process。Denial 進 audit log。
-**仍未擋（要 OS-level sandbox 才行）**：`process.dlopen` / `process.binding` native escape、`Atomics + SharedArrayBuffer` 跨 thread、plugin 用 `new Worker(code, {eval:true})` spawn 沒 gate 的子 worker。Phase 4 可考慮 wrap Worker 構造子。
+**狀態**：✓ **完成** — Phase 1-4 全 ship。manifest `sandboxed: true` 的 plugin 跑在 worker_thread；require gate 攔 builtin；nested-worker spawn 一律 throw（即使 unrestricted）；require-denied / worker-spawn-attempt / route-mount / handler-error 全進 SQLite audit log，可 query `/api/plugin-audit`。
+**仍未擋（要 OS-level sandbox 才行）**：`process.dlopen` / `process.binding` native escape、`Atomics + SharedArrayBuffer` 跨 thread。下一輪可考慮：(a) per-plugin event loop watchdog；(b) per-plugin memory cap；(c) plugin marketplace audit dashboard UI。
 Sample [plugins/sandboxed-hello/](node-express/plugins/sandboxed-hello/) 含 `/try-fs` demo 看 gate 動作。
 
 ---

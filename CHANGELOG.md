@@ -12,6 +12,45 @@ All notable changes to this project will be documented in this file.
 
 (no pending changes)
 
+## [1.4.0] - 2026-05-20
+
+v2 Theme A（規模）4 個 phase 一次 ship + Theme D（plugin sandbox）整個收尾。Dump 端 encrypt-at-rest + streaming → S3 multipart 的完整 production-grade backup pipeline 上線；scheduled backup 多了 per-schedule history + retention + time-travel restore；plugin sandbox 加上 persistent audit log + nested-worker spawn gate。Node unit test 309 → 401；CLI 41 → 48；License-server 66 不變。
+
+### Added — 大型 DB 備份管線（v2 Theme A, Phase 1-4）
+
+- **Dump file AES-256-GCM 加密**（[lib/dump-crypto.js](node-express/lib/dump-crypto.js)）：scrypt KDF (N=16384) 衍生 key；檔頭 magic `DBMENC01` + salt + iv，尾端 16B GCM auth tag。`encryptStream` / `decryptStream` 走 Node Transform — RAM O(1) 不論 dump 多大（decrypt 用「滾動保留末 16B」追蹤 auth tag）。
+- **S3 cloud destination**（[lib/dest-s3.js](node-express/lib/dest-s3.js)）：`@aws-sdk/client-s3` (optional dep) + `@aws-sdk/lib-storage` 多片上傳，檔 ≥ 100MB 自動 multipart。Key pattern token `{prefix}{dbName}-{ts}{ext}`、雙副檔名（`.sql.enc` / `.jsonl.enc`）認得，custom endpoint 支援 MinIO / Cloudflare R2。`deleteLocal:true` 是純 S3 archive 模式。
+- **Streaming 全套**：export.js / import.js / 4 個 CLI command 都改走 `encryptStream` / `decryptStream`；S3 上傳本來就是 stream。整條 dump → encrypt → upload 沒有 in-memory buffer。
+- **Scheduled backup history + retention**（[lib/schedule-history.js](node-express/lib/schedule-history.js)）：輸出改成 per-schedule subdirectory (`scheduled-backups/{sched-id}/...`)；`retentionCount` + `retentionDays` 聯集判定（任一條 trigger 就砍舊檔）；`DBMIGRATOR_DUMP_PASSWORD` env 開了 schedule 自動 streaming encrypt。
+- **Time-travel restore**：3 個新 endpoint —
+  - `GET /api/schedule/:id/history` 列歷史
+  - `POST /api/schedule/:id/restore` 任選一份還原（自動 streaming decrypt，target 可 override 到別的 DB）
+  - `DELETE /api/schedule/:id/history/:name` 手動清
+  Path traversal 雙層防禦（`isSafeHistoryName` + `resolveHistoryPath` normalize check）。
+- **CLI flags**：`--encrypt --password-env VAR` 跟 `--s3-bucket / --s3-prefix / --s3-region / --s3-endpoint / --s3-delete-local` 上 `export` & `dump-neutral`；`import` & `restore-neutral` 自動偵測 `.enc` 解密。
+- **GitHub Action inputs**：新增 `encrypt` / `dump-password` / `s3-bucket` / `s3-prefix` / `s3-region` / `s3-endpoint` / `s3-delete-local`，dump-password 自動走 `--password-env` 不落 argv。
+
+### Added — Plugin sandbox 收尾（v2 Theme D, Phase 4）
+
+- **Persistent audit log**（[lib/plugin-audit.js](node-express/lib/plugin-audit.js)）：SQLite-backed append-only；schema 用 JSON detail 欄（新 event type 不用 migration）；獨立 DB（`plugin-audit.db`）避免跟 jobs/schedules retention 政策衝突
+- **4 種 audit event**：`require-denied`（Phase 3 之前只 log warn，現在進 DB）/ `worker-spawn-attempt`（Phase 4 新）/ `route-mount` / `handler-error`
+- **Worker constructor gate**：`installWorkerGate` 在 plugin require 之前 patch `worker_threads.Worker` + `globalThis.Worker`（Node 21+ 暴露的）。一律 throw — 即使 `unrestricted` 也擋 nested worker，防 "spawn 子 worker 開乾淨 sandbox 逃出去" 這招
+- **新 endpoint**：`GET /api/plugin-audit` (filter by plugin / event / since / minSeverity)、`/count`、`POST /prune`
+
+### Changed
+
+- Schedule dispatchSchedule 改寫 per-schedule subdirectory；`_files/list` 兼容 legacy flat 檔
+- `SandboxedPlugin` constructor 多 `onAudit` callback；`pluginHost` 注入後寫 SQLite
+
+### Fixed
+
+- `decryptStream` GCM auth tag 處理：用 `滾動保留尾端 TAG_LEN bytes` 邏輯處理「直到流結束才能確定哪 16B 是 tag」
+
+### Docs
+
+- OpenAPI 新 tag `PluginAudit` + 3 endpoint；schedule history / retention 也進文件
+- ROADMAP_v2.md：Theme A Phase 1-4 標 ✓；Theme D Phase 4 標 ✓（Phase 5 legacy compat 早在 Phase 1 偵測完成）
+
 ## [1.3.0] - 2026-05-19
 
 v2 Theme D (plugin sandbox) Phase 1-3 + Theme E (observability) 全收尾。Plugin 現在跑在 worker_thread + per-permission `require()` gate，崩潰隔離；兩個 server 都吐 Prometheus `/metrics` 跟結構化 `/healthz`。Node unit test 240 → 309；License-server pure 53 → 66。
