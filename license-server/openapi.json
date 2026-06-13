@@ -19,6 +19,7 @@
     { "name": "Billing",    "description": "Stripe / 綠界 (ECPay) checkout" },
     { "name": "Revocation", "description": "Offline-license remote kill switch（公開無 auth）" },
     { "name": "Admin",      "description": "Admin web UI（cookie-auth）" },
+    { "name": "AdminWebhooks", "description": "v2 Theme E follow-up — HMAC-signed admin alert webhooks（user.kicked / payment.succeeded / payment.failed / subscription.canceled / license.expired / user.registered）" },
     { "name": "Observability", "description": "Prometheus /metrics + structured /healthz（公開無 auth；給 scraper / liveness probe）" }
   ],
   "components": {
@@ -449,6 +450,65 @@
           "type": "object", "properties": { "reason": { "type": "string" } }
         } } } },
         "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/admin/webhooks": {
+      "get": {
+        "tags": ["AdminWebhooks"],
+        "summary": "列 admin webhooks + KNOWN_EVENTS",
+        "security": [{ "adminCookie": [] }],
+        "responses": { "200": { "description": "{ webhooks: [{ id, name, url, events, active, last_event, last_status, ... }], knownEvents: [...] }" } }
+      },
+      "post": {
+        "tags": ["AdminWebhooks"],
+        "summary": "建立 webhook — secret 只在 response 回傳一次",
+        "description": "HMAC-SHA256 用 secret 簽 body；header `X-LicenseServer-Signature: sha256=<hex>`。Subscriber 端驗章方式同 node-express webhooks (v1.2.0 之前範例)。",
+        "security": [{ "adminCookie": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["name", "url", "events"],
+          "properties": {
+            "name":   { "type": "string", "maxLength": 64 },
+            "url":    { "type": "string", "format": "uri", "description": "http:// 或 https://" },
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["*", "ping", "user.kicked", "user.registered", "license.expired",
+                         "payment.succeeded", "payment.failed", "subscription.canceled"]
+              },
+              "minItems": 1
+            }
+          }
+        } } } },
+        "responses": {
+          "200": { "description": "{ id, name, url, events, secret (lswhsec_…, 僅此一次), secret_prefix }" },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/api/admin/webhooks/{id}": {
+      "patch": {
+        "tags": ["AdminWebhooks"], "summary": "更新（name / url / events / active）",
+        "security": [{ "adminCookie": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "delete": {
+        "tags": ["AdminWebhooks"], "summary": "刪除 webhook",
+        "security": [{ "adminCookie": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "{ ok: true }" }, "404": { "description": "not found" } }
+      }
+    },
+    "/api/admin/webhooks/{id}/test": {
+      "post": {
+        "tags": ["AdminWebhooks"], "summary": "Test-ping — 立刻送一個 `ping` 事件，驗 receiver 收得到 + 驗章 OK",
+        "security": [{ "adminCookie": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "{ ok, status, attempt } 或 { ok:false, attempts, error }" },
+          "400": { "description": "webhook not found" }
+        }
       }
     }
   }

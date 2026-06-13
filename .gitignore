@@ -39,6 +39,7 @@ license-server/license.db-shm
 license-server/*.db
 license-server/*.db-wal
 license-server/*.db-shm
+license-server/.license-server-key
 
 # DB Migrator client runtime state
 node-express/.trial

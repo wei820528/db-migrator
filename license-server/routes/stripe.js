@@ -29,6 +29,12 @@ function logEvent(userId, event, details) {
     .run(userId || null, '', 'stripe', event, details ? JSON.stringify(details) : null);
 }
 
+// Theme E follow-up: emit admin webhook on payment-related events
+function emitPaymentWebhook(event, payload) {
+  try { require('../lib/admin-webhooks').emit(event, { source: 'stripe', ...payload }); }
+  catch { /* admin-webhooks 沒裝 better-sqlite3 → non-fatal */ }
+}
+
 // ============================================================
 // Create checkout session
 //   body: { plan, userToken }   userToken = current login token (so we know who)
@@ -101,6 +107,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
                       WHERE id = ?`)
             .run(plan, PLANS[plan].max_devices, expires.toISOString(), customerId, userId);
           logEvent(userId, 'plan_upgraded', { plan, via: 'stripe', sessionId: sess.id });
+          emitPaymentWebhook('payment.succeeded', { userId, plan, sessionId: sess.id, kind: 'upgrade' });
         }
         break;
       }
@@ -115,6 +122,16 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
           base.setFullYear(base.getFullYear() + 1);
           db.prepare('UPDATE users SET expires_at = ? WHERE id = ?').run(base.toISOString(), user.id);
           logEvent(user.id, 'subscription_renewed', { invoiceId: inv.id });
+          emitPaymentWebhook('payment.succeeded', { userId: user.id, invoiceId: inv.id, kind: 'renewal' });
+        }
+        break;
+      }
+      case 'invoice.payment_failed': {
+        const inv = event.data.object;
+        const user = db.prepare('SELECT * FROM users WHERE stripe_customer_id = ?').get(inv.customer);
+        if (user) {
+          logEvent(user.id, 'payment_failed', { invoiceId: inv.id });
+          emitPaymentWebhook('payment.failed', { userId: user.id, invoiceId: inv.id, amount: inv.amount_due });
         }
         break;
       }
@@ -122,7 +139,10 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         // Cancellation — let it run until expires_at, then it'll naturally fail checkUserStatus
         const sub = event.data.object;
         const user = db.prepare('SELECT * FROM users WHERE stripe_customer_id = ?').get(sub.customer);
-        if (user) logEvent(user.id, 'subscription_canceled', { subscriptionId: sub.id });
+        if (user) {
+          logEvent(user.id, 'subscription_canceled', { subscriptionId: sub.id });
+          emitPaymentWebhook('subscription.canceled', { userId: user.id, subscriptionId: sub.id });
+        }
         break;
       }
       default:

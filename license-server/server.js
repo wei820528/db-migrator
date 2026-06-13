@@ -45,6 +45,14 @@ app.use((req, res, next) => {
 // =================================================================
 // Helpers
 // =================================================================
+// Theme E follow-up: 部分 logEvent name → admin-webhook event name
+// （不是所有 event 都該觸發 webhook — 例如 login / heartbeat 太 noisy）
+const WEBHOOK_EVENT_MAP = {
+  register: 'user.registered',
+  kicked:   'user.kicked',
+  expired:  'license.expired',
+};
+
 function logEvent(userId, ipAddr, ua, event, details) {
   db.prepare('INSERT INTO event_log (user_id, ip, user_agent, event, details) VALUES (?,?,?,?,?)').run(
     userId || null, ipAddr || '', ua || '', event, details ? JSON.stringify(details) : null
@@ -55,6 +63,13 @@ function logEvent(userId, ipAddr, ua, event, details) {
       'License server events by name (login / kicked / register / etc.)')
       .inc({ event });
   } catch { /* metrics not loaded — non-fatal */ }
+  // Theme E follow-up: admin webhook emit (mapped events only)
+  const whEvent = WEBHOOK_EVENT_MAP[event];
+  if (whEvent) {
+    try {
+      require('./lib/admin-webhooks').emit(whEvent, { userId, event, ipAddr, ua, details });
+    } catch { /* webhook module 沒 better-sqlite3 → non-fatal */ }
+  }
 }
 function ipOf(req) {
   return (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || req.ip || '';
@@ -344,6 +359,7 @@ function refreshLicenseServerGauges(m) {
 }
 
 app.use('/api/admin', require('./routes/admin')({ logEvent, ipOf, checkUserStatus }));
+app.use('/api/admin/webhooks', require('./routes/admin-webhooks'));
 app.use('/api/user',  require('./routes/user'));
 app.use('/api/revocation', require('./routes/revocation'));
 
